@@ -1,5 +1,5 @@
 ---
-title: A Simple Incident Playbook for Suspicious Agent Behavior
+title: Incident response autonomous Agent misconduct
 description: A clear response flow for maintainers when autonomous or coordinated behavior creates review risk.
 date: March 1, 2026
 author: Pratrol Team

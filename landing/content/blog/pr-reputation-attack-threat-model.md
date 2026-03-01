@@ -1,5 +1,5 @@
 ---
-title: When a PR Review Turns Into Public Pressure
+title: When a PR review turns into public pressure
 description: A practical guide for maintainers when pull request disagreements move outside GitHub.
 date: March 1, 2026
 author: Pratrol Team

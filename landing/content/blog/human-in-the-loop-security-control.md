@@ -1,5 +1,5 @@
 ---
-title: Human Review Is a Security Control
+title: Human review Is a security control
 description: Why human-in-the-loop is a core control for safe pull request decisions, and how to apply it without slowing delivery.
 date: March 1, 2026
 author: Pratrol Team
