@@ -59,7 +59,7 @@ pub trait GitHubClient: Send + Sync {
         pr_number: u64,
     ) -> Result<Vec<String>, GitHubError>;
 
-    async fn post_comment(
+    async fn post_review(
         &self,
         owner: &str,
         repo: &str,

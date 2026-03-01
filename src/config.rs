@@ -23,6 +23,9 @@ pub enum ConfigError {
         value: String,
         source: std::num::ParseIntError,
     },
+
+    #[error("invalid model name: {value}")]
+    InvalidModelName { value: String },
 }
 
 #[derive(Clone)]
@@ -32,6 +35,7 @@ pub struct Config {
     pub github_webhook_secret: String,
     pub mistral_api_key: String,
     pub listen_addr: SocketAddr,
+    pub mistral_model: String,
 }
 
 impl Config {
@@ -64,12 +68,16 @@ impl Config {
             }
         })?;
 
+        let mistral_model = env::var("MISTRAL_MODEL")
+            .unwrap_or_else(|_| "mistral-7b-instruct-v0.1.Q4_0.gguf".into());
+
         Ok(Self {
             github_app_id,
             github_private_key,
             github_webhook_secret,
             mistral_api_key,
             listen_addr,
+            mistral_model,
         })
     }
 }

@@ -28,7 +28,9 @@ impl CommentService {
             )
             .replace("{{combined_icon}}", &payload.combined_tier_icon)
             .replace("{{combined_tier}}", &payload.combined_tier_label)
-            .replace("{{summary}}", &payload.summary);
+            .replace("{{summary}}", &payload.summary)
+            .replace("{{key_signal}}", &payload.key_signal)
+            .replace("{{recommendation}}", &payload.recommendation);
 
         if payload.analysis_partial {
             output.push_str(PARTIAL_NOTE);
@@ -54,6 +56,8 @@ mod tests {
             combined_tier_label: "Medium".to_owned(),
             combined_tier_icon: "~".to_owned(),
             summary: "A good PR.".to_owned(),
+            key_signal: "Clean separation of concerns.".to_owned(),
+            recommendation: "Approve after verifying tests pass.".to_owned(),
             analysis_partial: partial,
         }
     }
@@ -68,6 +72,14 @@ mod tests {
         assert!(output.contains("~ Medium"), "should contain quality tier");
         assert!(output.contains("66/100"), "should contain combined score");
         assert!(output.contains("A good PR."), "should contain summary");
+        assert!(
+            output.contains("Clean separation of concerns."),
+            "should contain key signal"
+        );
+        assert!(
+            output.contains("Approve after verifying tests pass."),
+            "should contain recommendation"
+        );
         assert!(
             !output.contains("AI analysis was unavailable"),
             "should not contain partial note"
