@@ -3,7 +3,7 @@
     <SiteHeader active="home" />
 
     <main class="shell pb-24 pt-14 lg:pt-20">
-      <section class="max-w-3xl">
+      <section>
         <span class="kicker">Legal & Transparency</span>
         <h1 class="mt-5 text-4xl font-bold tracking-tight text-slate-950">Legal Information</h1>
         <p class="mt-4 text-lg text-slate-600">
@@ -13,7 +13,7 @@
 
       <div class="mt-16 grid gap-12 sm:grid-cols-2">
         <div class="panel p-8">
-          <h2 class="text-xs font-bold uppercase tracking-widest text-blue-600 mb-6 underline underline-offset-8 decoration-2 decoration-blue-100">The Entity</h2>
+          <h2 class="text-xs font-bold uppercase tracking-widest text-slate-900 mb-6 underline underline-offset-8 decoration-2 decoration-slate-100">The Entity</h2>
           <div class="space-y-4 text-sm text-slate-700 leading-relaxed">
             <p><strong class="text-slate-900 block font-semibold mb-1">Company:</strong> STRATORYS SAS</p>
             <p><strong class="text-slate-900 block font-semibold mb-1">Share Capital:</strong> 100 EUR</p>
@@ -24,7 +24,7 @@
         </div>
 
         <div class="panel p-8">
-          <h2 class="text-xs font-bold uppercase tracking-widest text-blue-600 mb-6 underline underline-offset-8 decoration-2 decoration-blue-100">Hosting & Privacy</h2>
+          <h2 class="text-xs font-bold uppercase tracking-widest text-slate-900 mb-6 underline underline-offset-8 decoration-2 decoration-slate-100">Hosting & Privacy</h2>
           <div class="space-y-4 text-sm text-slate-700 leading-relaxed">
             <p><strong class="text-slate-900 block font-semibold mb-1">Provider:</strong> Cloudflare, Inc.</p>
             <p><strong class="text-slate-900 block font-semibold mb-1">Address:</strong> 101 Townsend St, San Francisco, CA 94107, USA</p>
@@ -35,7 +35,7 @@
       </div>
 
       <section class="mt-16 panel p-8">
-        <h2 class="text-xs font-bold uppercase tracking-widest text-blue-600 mb-6 underline underline-offset-8 decoration-2 decoration-blue-100">Intellectual Property</h2>
+        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-900 mb-6 underline underline-offset-8 decoration-2 decoration-slate-100">Intellectual Property</h2>
         <div class="prose max-w-none text-sm leading-relaxed text-slate-700">
           <p>
             All content (text, logos, code) is the exclusive property of STRATORYS SAS. "STRATORYS" is a registered trademark.
