@@ -33,15 +33,24 @@ warnings = "deny"
 unsafe_code = "deny"
 
 [workspace.lints.clippy]
-uninlined_format_args = "deny"
+cargo      = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+pedantic   = { level = "deny", priority = -1 }
+perf       = { level = "deny", priority = -1 }
+style      = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+
+allow_attributes_without_reason = "deny"
 missing_assert_message = "deny"
+missing_docs_in_private_items = "deny"
+multiple_crate_versions = "allow"
 self_named_module_files = "deny"
-wildcard_imports = "deny"
 semicolon_outside_block = "deny"
 single_char_lifetime_names = "deny"
 str_to_string = "deny"
+undocumented_unsafe_blocks = "deny"
+unseparated_literal_suffix = "deny"
 unwrap_used = "deny"
-struct_field_names = "allow"
 
 [dev-dependencies]
 tower = { version = "0.5.3", features = ["util"] }
