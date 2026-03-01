@@ -78,8 +78,24 @@ async fn main() {
 
     info!(message = "Server started.", addr = %config.listen_addr);
 
-    if let Err(error) = axum::serve(listener, app).await {
+    let shutdown = async {
+        let ctrl_c = tokio::signal::ctrl_c();
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("Failed to install SIGTERM handler.");
+        tokio::select! {
+            _ = ctrl_c => {}
+            _ = sigterm.recv() => {}
+        }
+        info!(message = "Shutdown signal received, draining connections.");
+    };
+
+    if let Err(error) = axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await
+    {
         error!(message = "Server error.", %error);
         std::process::exit(1);
     }
+
+    info!(message = "Server stopped.");
 }
