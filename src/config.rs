@@ -68,8 +68,8 @@ impl Config {
             }
         })?;
 
-        let mistral_model = env::var("MISTRAL_MODEL")
-            .unwrap_or_else(|_| "mistral-7b-instruct-v0.1.Q4_0.gguf".into());
+        let mistral_model =
+            env::var("MISTRAL_MODEL").unwrap_or_else(|_| "mistral-small-latest".into());
 
         Ok(Self {
             github_app_id,
