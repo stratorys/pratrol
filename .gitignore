@@ -1,2 +1,4 @@
 /target
 .env
+.envrc.local
+.direnv/
