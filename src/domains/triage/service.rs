@@ -59,7 +59,16 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
         let repo = &request.repo;
         let pr_number = request.pr_number;
 
-        let (user, events_count, orgs_count, merged_target, merged_global, diff, commits) = tokio::try_join!(
+        let (
+            user,
+            events_count,
+            orgs_count,
+            merged_target,
+            merged_global,
+            diff,
+            commits,
+            contributing,
+        ) = tokio::try_join!(
             client.fetch_user(login),
             client.fetch_events_count(login),
             client.fetch_orgs_count(login),
@@ -67,6 +76,7 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             client.fetch_merged_prs_global(login),
             client.fetch_diff(owner, repo, pr_number),
             client.fetch_commits(owner, repo, pr_number),
+            client.fetch_contributing(owner, repo),
         )?;
 
         let profile_signals = ProfileSignals {
@@ -81,7 +91,9 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
 
         let profile_score = self.scoring.compute_profile_score(&profile_signals);
 
-        let prompt = self.analysis.build_prompt(&diff, &commits);
+        let prompt = self
+            .analysis
+            .build_prompt(&diff, &commits, contributing.as_deref());
 
         let (quality_score, summary, key_signal, recommendation, analysis_partial) =
             match self.mistral.chat_completion(&prompt).await {
@@ -263,6 +275,14 @@ mod tests {
             _pr_number: u64,
         ) -> Result<Vec<String>, GitHubError> {
             Ok(vec!["Initial commit".to_owned()])
+        }
+
+        async fn fetch_contributing(
+            &self,
+            _owner: &str,
+            _repo: &str,
+        ) -> Result<Option<String>, GitHubError> {
+            Ok(None)
         }
 
         async fn post_review(

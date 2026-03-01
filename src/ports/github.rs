@@ -74,6 +74,12 @@ pub trait GitHubClient: Send + Sync {
         pr_number: u64,
     ) -> Result<Vec<String>, GitHubError>;
 
+    async fn fetch_contributing(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Option<String>, GitHubError>;
+
     async fn post_review(
         &self,
         owner: &str,

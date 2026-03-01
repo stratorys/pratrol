@@ -23,7 +23,7 @@ Respond in this exact JSON format:
   "recommendation": "<one sentence>"
 }
 
-## Diff
+{{contributing}}## Diff
 
 {{diff}}
 

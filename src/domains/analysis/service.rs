@@ -17,15 +17,25 @@ impl AnalysisService {
         &self,
         diff: &str,
         commits: &[String],
+        contributing: Option<&str>,
     ) -> String {
         let mut commits_text = String::with_capacity(commits.len() * 80);
         for (index, message) in commits.iter().enumerate() {
             let _ = writeln!(commits_text, "{}. {}", index + 1, message);
         }
 
+        let contributing_section = match contributing {
+            Some(content) => format!(
+                "## Contributing Guidelines\n\nThe repository has contributing guidelines. \
+                 Evaluate whether the PR follows them.\n\n{content}\n\n"
+            ),
+            None => String::new(),
+        };
+
         REVIEW_PROMPT_TEMPLATE
             .replace("{{diff}}", diff)
             .replace("{{commits}}", &commits_text)
+            .replace("{{contributing}}", &contributing_section)
     }
 
     pub fn parse_response(
@@ -100,7 +110,7 @@ mod tests {
         let service = AnalysisService::new();
         let diff = "diff --git a/file.rs";
         let commits = vec!["Initial commit".to_owned(), "Fix bug".to_owned()];
-        let prompt = service.build_prompt(diff, &commits);
+        let prompt = service.build_prompt(diff, &commits, None);
         assert!(
             prompt.contains("diff --git a/file.rs"),
             "prompt should contain diff"
@@ -112,6 +122,35 @@ mod tests {
         assert!(
             prompt.contains("Fix bug"),
             "prompt should contain second commit"
+        );
+    }
+
+    #[test]
+    fn test_build_prompt_with_contributing() {
+        let service = AnalysisService::new();
+        let diff = "diff --git a/file.rs";
+        let commits = vec!["Fix bug".to_owned()];
+        let contributing = "Please write tests for all changes.";
+        let prompt = service.build_prompt(diff, &commits, Some(contributing));
+        assert!(
+            prompt.contains("Please write tests for all changes."),
+            "prompt should contain contributing guidelines"
+        );
+        assert!(
+            prompt.contains("Contributing Guidelines"),
+            "prompt should contain contributing section header"
+        );
+    }
+
+    #[test]
+    fn test_build_prompt_without_contributing() {
+        let service = AnalysisService::new();
+        let diff = "diff --git a/file.rs";
+        let commits = vec!["Fix bug".to_owned()];
+        let prompt = service.build_prompt(diff, &commits, None);
+        assert!(
+            !prompt.contains("Contributing Guidelines"),
+            "prompt should not contain contributing section when absent"
         );
     }
 

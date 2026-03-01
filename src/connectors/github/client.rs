@@ -28,6 +28,14 @@ const QUERY_ENCODE_SET: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'#').add(
 
 const DIFF_MAX_CHARS: usize = 30_000;
 const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
+const CONTRIBUTING_PATHS: &[&str] = &[
+    "CONTRIBUTING.md",
+    "CONTRIBUTING",
+    "CONTRIBUTING.rst",
+    "CONTRIBUTING.txt",
+    ".github/CONTRIBUTING.md",
+    "docs/CONTRIBUTING.md",
+];
 
 #[derive(Deserialize)]
 struct GitHubUser {
@@ -185,6 +193,46 @@ impl GitHubClient for InstalledClient {
             })
             .collect();
         Ok(messages)
+    }
+
+    async fn fetch_contributing(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Option<String>, GitHubError> {
+        for path in CONTRIBUTING_PATHS {
+            let route = format!("/repos/{owner}/{repo}/contents/{path}");
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                ACCEPT,
+                HeaderValue::from_static("application/vnd.github.raw+json"),
+            );
+
+            let response = self.octocrab._get_with_headers(route, Some(headers)).await;
+
+            let response = match response {
+                Ok(resp) => resp,
+                Err(_) => continue,
+            };
+
+            if !response.status().is_success() {
+                continue;
+            }
+
+            let body_bytes = response
+                .into_body()
+                .collect()
+                .await
+                .map_err(|_| GitHubError::UnexpectedStatus)?
+                .to_bytes();
+
+            let content = String::from_utf8(body_bytes.to_vec())
+                .map_err(|_| GitHubError::UnexpectedStatus)?;
+
+            return Ok(Some(content));
+        }
+
+        Ok(None)
     }
 
     async fn post_review(
