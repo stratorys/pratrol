@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@nuxt/content": "^3.8.0",
+    "@nuxtjs/robots": "^5.7.0",
+    "@nuxtjs/sitemap": "^7.6.0",
     "@nuxtjs/tailwindcss": "^6.13.2",
     "better-sqlite3": "^12.6.2",
     "debug": "^4.4.3",
@@ -25,5 +27,8 @@
     "unist-util-visit": "^5.1.0",
     "vue": "^3.5.28",
     "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19"
   }
 }
