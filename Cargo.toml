@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["ljahier <lucas.jahier@stratorys.com>", "sehnryr <youn@melois.dev>"]
 description = "Pratrol, your intelligent PR triage for modern maintainers."
+license = "MPL-2.0"
 
 [dependencies]
 async-trait = "0.1.89"

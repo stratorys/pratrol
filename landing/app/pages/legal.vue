@@ -41,7 +41,7 @@
             All content (text, logos, code) is the exclusive property of STRATORYS SAS. "STRATORYS" is a registered trademark.
           </p>
           <p class="mt-4">
-            Research and projects are distributed under specific licenses (MIT or MPL-2.0) as noted in their respective repositories.
+            Research and projects are distributed under the MPL-2.0 license as noted in their respective repositories.
           </p>
         </div>
       </section>
