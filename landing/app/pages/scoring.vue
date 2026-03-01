@@ -3,7 +3,7 @@
     <SiteHeader active="scoring" />
 
     <main class="shell pb-24 pt-14 lg:pt-20">
-      <section class="max-w-4xl">
+      <section>
         <span class="kicker">Technical Reference</span>
         <h1 class="mt-5 text-4xl font-bold leading-tight tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
           The Confidence Model: How we weigh PR risk.
@@ -14,7 +14,6 @@
         </p>
       </section>
 
-      <!-- Scoring Components -->
       <section class="mt-24 grid gap-12 lg:grid-cols-2">
         <div>
           <h2 class="section-title text-2xl mb-8">Primary Risk Vectors</h2>
@@ -26,7 +25,7 @@
                 Are they a frequent contributor or a first-timer in a sensitive module?
               </p>
             </div>
-            <div class="panel p-6 border-l-4 border-l-blue-600">
+            <div class="panel p-6 border-l-4 border-l-slate-900">
               <h3 class="font-bold text-slate-900 mb-2">02. Logic Risk (Mistral AI)</h3>
               <p class="text-sm text-slate-600 leading-relaxed">
                 Mistral AI performs a deep semantic analysis of the diff. Unlike static analysis, it looks for logic traps, 
@@ -59,7 +58,7 @@
                 <span>File Sensitivity</span>
                 <span class="font-bold">× 0.20</span>
               </div>
-              <div class="pt-4 flex justify-between items-center text-blue-700 font-bold text-lg">
+              <div class="pt-4 flex justify-between items-center text-slate-900 font-bold text-lg">
                 <span>Final Confidence</span>
                 <span>= Result</span>
               </div>
@@ -71,7 +70,6 @@
         </div>
       </section>
 
-      <!-- Tier Reference Table -->
       <section id="tier-actions" class="mt-32">
         <h2 class="section-title text-2xl mb-8">Reviewer Playbook: From Tiers to Action</h2>
         <div class="overflow-hidden border border-slate-200">
@@ -102,7 +100,7 @@
                 <td class="px-6 py-6 text-slate-700 leading-relaxed">
                   Mixed signals. Potential logic edge cases flagged by Mistral or sensitive file modification.
                 </td>
-                <td class="px-6 py-6 text-slate-600 font-medium text-blue-700">
+                <td class="px-6 py-6 text-slate-600 font-medium text-slate-900 underline decoration-slate-200 decoration-2 underline-offset-4">
                   Assign a senior reviewer. Validate edge cases before merge.
                 </td>
               </tr>
@@ -113,7 +111,7 @@
                 <td class="px-6 py-6 text-slate-700 leading-relaxed">
                   Critical risk indicators. First-time contribution to sensitive core or logical inconsistencies detected.
                 </td>
-                <td class="px-6 py-6 text-slate-600 font-medium text-rose-700">
+                <td class="px-6 py-6 text-slate-600 font-medium text-slate-900 underline decoration-slate-200 decoration-2 underline-offset-4">
                   Full architectural review required. Mandatory secondary sign-off.
                 </td>
               </tr>
@@ -122,7 +120,6 @@
         </div>
       </section>
 
-      <!-- Bottom CTA -->
       <section class="mt-32 border-t border-slate-200 pt-20 text-center">
         <h2 class="section-title text-3xl">Apply this model to your workflow.</h2>
         <div class="mt-10 flex flex-wrap justify-center gap-4">

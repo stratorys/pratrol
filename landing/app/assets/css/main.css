@@ -5,13 +5,19 @@
 @layer base {
   * {
     border-radius: 0;
+    transition: none !important;
+  }
+
+  html {
+    background-color: #ffffff;
   }
 
   body {
     margin: 0;
-    color: #0f172a;
-    background: #fdfdfe;
+    color: #475569;
+    background: #ffffff;
     -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
   }
 }
 
@@ -30,7 +36,7 @@
   .shell {
     margin-left: auto;
     margin-right: auto;
-    max-width: 76rem;
+    max-width: 80rem;
     padding-left: 2rem;
     padding-right: 2rem;
   }
@@ -43,7 +49,7 @@
 
   .section-title {
     letter-spacing: -0.025em;
-    color: #0b1220;
+    color: #0f172a;
     font-weight: 700;
   }
 
@@ -51,7 +57,7 @@
     display: inline-block;
     border: 1px solid #e2e8f0;
     background: #f8fafc;
-    color: #475569;
+    color: #64748b;
     font-size: 0.7rem;
     font-weight: 700;
     letter-spacing: 0.1em;
@@ -60,19 +66,18 @@
   }
 
   .btn-primary {
-    border: 1px solid #1e293b;
-    background: #1e293b;
+    border: 1px solid #0f172a;
+    background: #0f172a;
     color: #ffffff;
     font-weight: 600;
     font-size: 0.85rem;
     padding: 0.65rem 1.25rem;
     text-decoration: none;
-    transition: all 0.15s ease;
   }
 
   .btn-primary:hover {
-    background: #0f172a;
-    border-color: #0f172a;
+    background: #000000;
+    border-color: #000000;
   }
 
   .btn-secondary {
@@ -83,7 +88,6 @@
     padding: 0.65rem 1.25rem;
     text-decoration: none;
     background: #ffffff;
-    transition: all 0.15s ease;
   }
 
   .btn-secondary:hover {
@@ -93,46 +97,32 @@
 
   .table-head {
     background: #f8fafc;
-    color: #475569;
+    color: #64748b;
     font-size: 11px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
 
-  /* Basic Prose for Blog Content */
   .prose {
-    font-size: 1rem;
-    line-height: 1.75;
+    font-size: 1.05rem;
+    line-height: 1.8;
     color: #334155;
   }
 
-  .prose h2 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-top: 2rem;
-    margin-bottom: 1rem;
+  .prose h1, .prose h2, .prose h3 {
     color: #0f172a;
+    font-weight: 700;
     letter-spacing: -0.025em;
   }
 
-  .prose p {
-    margin-bottom: 1.25rem;
-  }
-
-  .prose ul {
-    list-style-type: disc;
-    padding-left: 1.5rem;
-    margin-bottom: 1.25rem;
-  }
-
-  .prose li {
-    margin-bottom: 0.5rem;
-  }
-
+  .prose h2 { margin-top: 2.5rem; margin-bottom: 1.25rem; font-size: 1.75rem; }
+  .prose p { margin-bottom: 1.5rem; }
+  
   .prose code {
     background: #f1f5f9;
-    padding: 0.1rem 0.3rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #0f172a;
+    padding: 0.2rem 0.4rem;
     font-size: 0.9em;
+    font-weight: 600;
   }
 }

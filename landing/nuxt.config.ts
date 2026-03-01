@@ -5,7 +5,8 @@ export default defineNuxtConfig({
     head: {
       title: 'Pratrol - Prioritized Pull Request Triage',
       meta: [
-        { name: 'description', content: 'Triage pull requests by risk, not by timestamp. AI-assisted triage for GitHub teams.' }
+        { name: 'description', content: 'Triage pull requests by risk, not by timestamp. AI-assisted triage for GitHub teams.' },
+        { name: 'theme-color', content: '#f8fafc' }
       ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/logo.png' }

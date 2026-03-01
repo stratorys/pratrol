@@ -1,16 +1,14 @@
 <template>
   <div class="border border-[#d0d7de] bg-white shadow-sm font-sans text-[14px] leading-[1.5]">
-    <!-- GitHub Comment Header -->
     <div class="flex items-center justify-between bg-[#f6f8fa] px-4 py-2 border-b border-[#d0d7de]">
       <div class="flex items-center gap-2">
-        <div class="w-5 h-5 bg-blue-600 flex items-center justify-center text-[10px] text-white font-bold rounded-sm">P</div>
+        <div class="w-5 h-5 bg-[#0f172a] flex items-center justify-center text-[10px] text-white font-bold rounded-sm">P</div>
         <span class="font-semibold text-[#1f2328]">pratrol-bot</span>
         <span class="text-[#636c76]">commented 2m ago</span>
       </div>
       <div class="px-1.5 py-0.5 border border-[#d0d7de] bg-white text-[#636c76] text-[12px] font-medium">Contributor</div>
     </div>
 
-    <!-- Comment Body -->
     <div class="p-4 text-[#1f2328]">
       <div class="mb-4">
         <h3 class="text-base font-semibold mb-2 flex items-center gap-2">
@@ -61,5 +59,4 @@
 </template>
 
 <script setup lang="ts">
-// No props needed for the static refined hero version
 </script>
