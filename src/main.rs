@@ -6,6 +6,8 @@ mod ports;
 
 use std::sync::Arc;
 
+use rustls::crypto::CryptoProvider;
+use rustls::crypto::ring::default_provider;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
@@ -22,6 +24,10 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
+    CryptoProvider::install_default(default_provider())
+        .map_err(|_| "Failed to install default CryptoProvider.")
+        .ok();
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();

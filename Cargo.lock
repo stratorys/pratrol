@@ -1459,6 +1459,7 @@ dependencies = [
  "octocrab",
  "percent-encoding",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "sha2",
