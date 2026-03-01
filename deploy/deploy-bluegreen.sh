@@ -72,7 +72,9 @@ listen_addr_from_env_file() {
 switch_nginx_to_color() {
   local color="$1"
   local target
-  local previous
+  local previous_kind="missing"
+  local previous_target=""
+  local previous_backup=""
 
   if [[ "${color}" == "blue" ]]; then
     target="${NGINX_BLUE_SNIPPET}"
@@ -80,17 +82,37 @@ switch_nginx_to_color() {
     target="${NGINX_GREEN_SNIPPET}"
   fi
 
-  previous="$(readlink -f "${NGINX_ACTIVE_SNIPPET}" 2>/dev/null || true)"
+  if as_root test -L "${NGINX_ACTIVE_SNIPPET}"; then
+    previous_kind="symlink"
+    previous_target="$(as_root readlink "${NGINX_ACTIVE_SNIPPET}")"
+  elif as_root test -e "${NGINX_ACTIVE_SNIPPET}"; then
+    previous_kind="file"
+    previous_backup="/tmp/pratrol-active.conf.backup.$$"
+    as_root cp -a "${NGINX_ACTIVE_SNIPPET}" "${previous_backup}"
+  fi
 
   as_root ln -sfn "${target}" "${NGINX_ACTIVE_SNIPPET}"
 
   if ! as_root nginx -t; then
     echo "nginx config test failed after switching snippet, reverting."
-    if [[ -n "${previous}" ]]; then
-      as_root ln -sfn "${previous}" "${NGINX_ACTIVE_SNIPPET}"
-      as_root nginx -t >/dev/null 2>&1 || true
-    fi
+    case "${previous_kind}" in
+      symlink)
+        as_root ln -sfn "${previous_target}" "${NGINX_ACTIVE_SNIPPET}"
+        ;;
+      file)
+        as_root mv -f "${previous_backup}" "${NGINX_ACTIVE_SNIPPET}"
+        previous_backup=""
+        ;;
+      missing)
+        as_root rm -f "${NGINX_ACTIVE_SNIPPET}"
+        ;;
+    esac
+    as_root nginx -t >/dev/null 2>&1 || true
     return 1
+  fi
+
+  if [[ -n "${previous_backup}" ]]; then
+    as_root rm -f "${previous_backup}"
   fi
 
   as_root systemctl reload nginx
@@ -167,8 +189,19 @@ echo "Updating ${COLOR_LINK} symlink"
 as_root ln -sfn "${RELEASE_DIR}" "${COLOR_LINK}"
 
 echo "Restarting ${SERVICE_NAME}@${TARGET_COLOR}.service"
-as_root systemctl restart "${SERVICE_NAME}@${TARGET_COLOR}.service"
-as_root systemctl is-active --quiet "${SERVICE_NAME}@${TARGET_COLOR}.service"
+if ! as_root systemctl restart "${SERVICE_NAME}@${TARGET_COLOR}.service"; then
+  echo "Service restart failed: ${SERVICE_NAME}@${TARGET_COLOR}.service" >&2
+  as_root systemctl --no-pager status "${SERVICE_NAME}@${TARGET_COLOR}.service" || true
+  as_root journalctl --no-pager -u "${SERVICE_NAME}@${TARGET_COLOR}.service" -n 50 || true
+  exit 1
+fi
+
+if ! as_root systemctl is-active --quiet "${SERVICE_NAME}@${TARGET_COLOR}.service"; then
+  echo "Service is not active after restart: ${SERVICE_NAME}@${TARGET_COLOR}.service" >&2
+  as_root systemctl --no-pager status "${SERVICE_NAME}@${TARGET_COLOR}.service" || true
+  as_root journalctl --no-pager -u "${SERVICE_NAME}@${TARGET_COLOR}.service" -n 50 || true
+  exit 1
+fi
 
 LISTEN_ADDR="$(listen_addr_from_env_file "${TARGET_COLOR}" || true)"
 if command -v curl >/dev/null 2>&1 && [[ -n "${LISTEN_ADDR}" ]]; then
