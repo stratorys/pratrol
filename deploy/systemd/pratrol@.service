@@ -1,0 +1,25 @@
+[Unit]
+Description=Pratrol instance (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pratrol
+Group=pratrol
+WorkingDirectory=/opt/pratrol
+EnvironmentFile=-/etc/pratrol/common.env
+EnvironmentFile=/etc/pratrol/%i.env
+ExecStart=/opt/pratrol/releases/current-%i/pratrol
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/etc/pratrol
+
+[Install]
+WantedBy=multi-user.target
