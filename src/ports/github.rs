@@ -81,4 +81,12 @@ pub trait GitHubClient: Send + Sync {
         pr_number: u64,
         body: &str,
     ) -> Result<(), GitHubError>;
+
+    async fn add_labels(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+        labels: Vec<String>,
+    ) -> Result<(), GitHubError>;
 }
