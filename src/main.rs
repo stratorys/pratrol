@@ -50,10 +50,8 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), AppError> {
     let config = Config::from_env()?;
 
-    let github = Arc::new(GitHubConnector::new(
-        config.github_app_id,
-        &config.github_private_key,
-    )?);
+    let github =
+        Arc::new(GitHubConnector::new(config.github_app_id, &config.github_private_key).await?);
 
     let mistral = Arc::new(MistralConnector::new(config.clone())?);
 

@@ -75,6 +75,13 @@ pub trait GitHubClient: Send + Sync {
         pr_number: u64,
     ) -> Result<Vec<CommitInfo>, GitHubError>;
 
+    async fn has_pratrol_review(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+    ) -> Result<bool, GitHubError>;
+
     async fn post_review(
         &self,
         owner: &str,

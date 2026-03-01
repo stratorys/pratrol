@@ -59,6 +59,15 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
         let repo = &request.repo;
         let pr_number = request.pr_number;
 
+        if client.has_pratrol_review(owner, repo, pr_number).await? {
+            info!(
+                message = "Skipping PR, already triaged.",
+                triage_id = %triage_id,
+                pr_number,
+            );
+            return Ok(());
+        }
+
         let (user, events_count, orgs_count, merged_target, merged_global, diff, commits) = tokio::try_join!(
             client.fetch_user(login),
             client.fetch_events_count(login),
@@ -233,6 +242,9 @@ mod tests {
 
     fn setup_successful_client() -> MockGitHubClient {
         let mut client = MockGitHubClient::new();
+        client
+            .expect_has_pratrol_review()
+            .returning(|_, _, _| Ok(false));
         client.expect_fetch_user().returning(|_| {
             Ok(UserInfo {
                 account_age_days: 365,
@@ -288,6 +300,27 @@ mod tests {
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_ok(), "execute should succeed");
+    }
+
+    #[tokio::test]
+    async fn test_execute_skips_already_triaged() {
+        let mut app = MockGitHubApp::new();
+        app.expect_installation_client().returning(|_| {
+            let mut client = MockGitHubClient::new();
+            client
+                .expect_has_pratrol_review()
+                .returning(|_, _, _| Ok(true));
+            Ok(client)
+        });
+
+        let mistral = Arc::new(successful_mistral_response());
+        let service = TriageService::new(Arc::new(app), mistral);
+
+        let result = service.execute(sample_request()).await;
+        assert!(
+            result.is_ok(),
+            "execute should succeed without posting when already triaged"
+        );
     }
 
     #[tokio::test]

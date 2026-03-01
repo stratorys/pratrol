@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use chrono::Utc;
+use octocrab::Page;
 use octocrab::models::pulls::ReviewAction;
+use serde::Deserialize;
 
 use super::InstalledClient;
 use crate::ports::github::{
@@ -12,6 +14,20 @@ use crate::ports::github::{
 
 const DIFF_MAX_CHARS: usize = 30_000;
 const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
+
+const MAX_REVIEW_PAGES: u32 = 3;
+
+#[derive(Deserialize)]
+struct PublicEvent {
+    #[allow(dead_code)]
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct OrgItem {
+    #[allow(dead_code)]
+    login: String,
+}
 
 #[async_trait]
 impl GitHubClient for InstalledClient {
@@ -37,17 +53,20 @@ impl GitHubClient for InstalledClient {
         &self,
         login: &str,
     ) -> Result<u32, GitHubError> {
-        let route = format!("/users/{login}/events/public?per_page=100");
-        let events: Vec<serde_json::Value> = self.octocrab.get(route, None::<&()>).await?;
-        Ok(events.len() as u32)
+        let page = self.get_user_public_events(login).await?;
+        let items_len = page.items.len() as u32;
+        let total = match page.number_of_pages() {
+            Some(n) if n > 1 => (n - 1) * 100 + items_len,
+            _ => items_len,
+        };
+        Ok(total)
     }
 
     async fn fetch_orgs_count(
         &self,
         login: &str,
     ) -> Result<u32, GitHubError> {
-        let route = format!("/users/{login}/orgs?per_page=100");
-        let orgs: Vec<serde_json::Value> = self.octocrab.get(route, None::<&()>).await?;
+        let orgs = self.get_user_orgs(login).await?;
         Ok(orgs.len() as u32)
     }
 
@@ -114,6 +133,39 @@ impl GitHubClient for InstalledClient {
             .collect();
 
         Ok(commits)
+    }
+
+    async fn has_pratrol_review(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+    ) -> Result<bool, GitHubError> {
+        // The Reviews API returns results in chronological order with no sort
+        // option. Scan up to MAX_REVIEW_PAGES pages; if we still haven't found
+        // our review by then, allow a fresh triage — a PR with that many
+        // reviews deserves an updated score anyway.
+        for page_number in 1..=MAX_REVIEW_PAGES {
+            let page = self
+                .octocrab
+                .pulls(owner, repo)
+                .list_reviews(pr_number)
+                .per_page(100)
+                .page(page_number)
+                .send()
+                .await?;
+            if page
+                .items
+                .iter()
+                .any(|r| r.user.as_ref().is_some_and(|u| u.login == self.bot_login))
+            {
+                return Ok(true);
+            }
+            if page.items.len() < 100 {
+                return Ok(false);
+            }
+        }
+        Ok(false)
     }
 
     #[allow(
@@ -188,6 +240,29 @@ impl GitHubClient for InstalledClient {
 }
 
 impl InstalledClient {
+    // octocrab 0.49 does not expose GET /users/{login}/events/public
+    async fn get_user_public_events(
+        &self,
+        login: &str,
+    ) -> Result<Page<PublicEvent>, octocrab::Error> {
+        self.octocrab
+            .get(
+                format!("/users/{login}/events/public"),
+                Some(&[("per_page", "100")]),
+            )
+            .await
+    }
+
+    // octocrab 0.49 does not expose GET /users/{login}/orgs
+    async fn get_user_orgs(
+        &self,
+        login: &str,
+    ) -> Result<Vec<OrgItem>, octocrab::Error> {
+        self.octocrab
+            .get(format!("/users/{login}/orgs"), Some(&[("per_page", "100")]))
+            .await
+    }
+
     async fn search_issues_count(
         &self,
         query: &str,
