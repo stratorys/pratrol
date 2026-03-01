@@ -2,8 +2,10 @@ mod api;
 mod config;
 mod connectors;
 mod domains;
+mod error;
 mod ports;
 
+use std::process::ExitCode;
 use std::sync::Arc;
 
 use rustls::crypto::CryptoProvider;
@@ -18,6 +20,7 @@ use crate::config::Config;
 use crate::connectors::github::GitHubConnector;
 use crate::connectors::mistral::MistralConnector;
 use crate::domains::triage::service::TriageService;
+use crate::error::AppError;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -26,7 +29,7 @@ pub struct AppState {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     CryptoProvider::install_default(default_provider())
         .map_err(|_| "Failed to install default CryptoProvider.")
         .ok();
@@ -35,29 +38,24 @@ async fn main() {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    let config = match Config::from_env() {
-        Ok(config) => config,
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            error!(message = "Failed to load configuration.", %error);
-            std::process::exit(1);
+            error!(message = "Fatal error.", %error);
+            ExitCode::FAILURE
         }
-    };
+    }
+}
 
-    let github = match GitHubConnector::new(config.github_app_id, &config.github_private_key) {
-        Ok(connector) => Arc::new(connector),
-        Err(error) => {
-            error!(message = "Failed to initialize GitHub connector.", %error);
-            std::process::exit(1);
-        }
-    };
+async fn run() -> Result<(), AppError> {
+    let config = Config::from_env()?;
 
-    let mistral = match MistralConnector::new(config.clone()) {
-        Ok(connector) => Arc::new(connector),
-        Err(error) => {
-            error!(message = "Failed to initialize Mistral connector.", %error);
-            std::process::exit(1);
-        }
-    };
+    let github = Arc::new(GitHubConnector::new(
+        config.github_app_id,
+        &config.github_private_key,
+    )?);
+
+    let mistral = Arc::new(MistralConnector::new(config.clone())?);
 
     let triage_service = Arc::new(TriageService::new(github, mistral));
 
@@ -68,13 +66,7 @@ async fn main() {
 
     let app = api::router().with_state(state);
 
-    let listener = match tokio::net::TcpListener::bind(config.listen_addr).await {
-        Ok(listener) => listener,
-        Err(error) => {
-            error!(message = "Failed to bind listener.", %error, addr = %config.listen_addr);
-            std::process::exit(1);
-        }
-    };
+    let listener = tokio::net::TcpListener::bind(config.listen_addr).await?;
 
     info!(message = "Server started.", addr = %config.listen_addr);
 
@@ -89,13 +81,11 @@ async fn main() {
         info!(message = "Shutdown signal received, draining connections.");
     };
 
-    if let Err(error) = axum::serve(listener, app)
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
-        .await
-    {
-        error!(message = "Server error.", %error);
-        std::process::exit(1);
-    }
+        .await?;
 
     info!(message = "Server stopped.");
+
+    Ok(())
 }
