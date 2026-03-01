@@ -19,7 +19,7 @@ use crate::domains::triage::service::TriageService;
 #[derive(Clone)]
 pub struct AppState {
     pub triage_service: Arc<TriageService<GitHubConnector, MistralConnector>>,
-    pub webhook_secret: String,
+    pub webhook_secret: Arc<str>,
 }
 
 #[tokio::main]
@@ -60,7 +60,7 @@ async fn main() {
 
     let state = AppState {
         triage_service,
-        webhook_secret: config.github_webhook_secret,
+        webhook_secret: config.github_webhook_secret.into(),
     };
 
     let app = api::router().with_state(state);
