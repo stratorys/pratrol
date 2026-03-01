@@ -20,6 +20,7 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ReadOnlyPaths=/etc/pratrol
+ReadWritePaths=/opt/pratrol/releases
 
 [Install]
 WantedBy=multi-user.target

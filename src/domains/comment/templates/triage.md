@@ -1,19 +1,15 @@
-## Pratrol - PR Triage
+## Pratrol Triage Brief: {{combined_badge}} **{{combined_tier}} Confidence**
 
-| | Score | Confidence |
-|---|---|---|
-| Author profile | {{profile_score}}/100 | {{profile_icon}} {{profile_tier}} |
-| PR quality | {{quality_score}}/100 | {{quality_icon}} {{quality_tier}} |
-| **Overall** | **{{combined_score}}/100** | **{{combined_icon}} {{combined_tier}}** |
+Pratrol assessed this pull request across the primary risk vectors below.
 
-### Summary
+| Risk Vector | Score | Tier |
+|---|---:|---:|
+| Contributor Context | {{profile_score}}/100 | {{profile_badge}} **{{profile_tier}}** |
+| Logic Risk (Mistral) | {{quality_score}}/100 | {{quality_badge}} **{{quality_tier}}** |
+| **Overall Confidence** | **{{combined_score}}/100** | **{{combined_badge}} {{combined_tier}}** |
 
-> {{summary}}
-
-### Key signal
-
-> {{key_signal}}
-
-### Recommendation
-
-> {{recommendation}}
+> **Summary:** {{summary}}
+>
+> **Key Signal:** {{key_signal}}
+>
+> **Recommendation:** {{recommendation}}
