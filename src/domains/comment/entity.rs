@@ -1,0 +1,13 @@
+pub struct CommentPayload {
+    pub profile_score: f64,
+    pub profile_tier_label: String,
+    pub profile_tier_icon: String,
+    pub quality_score: f64,
+    pub quality_tier_label: String,
+    pub quality_tier_icon: String,
+    pub combined_score: f64,
+    pub combined_tier_label: String,
+    pub combined_tier_icon: String,
+    pub summary: String,
+    pub analysis_partial: bool,
+}
