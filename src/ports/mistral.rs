@@ -14,5 +14,8 @@ pub enum MistralError {
 
 #[async_trait]
 pub trait MistralPort: Send + Sync {
-    async fn chat_completion(&self, prompt: &str) -> Result<String, MistralError>;
+    async fn chat_completion(
+        &self,
+        prompt: &str,
+    ) -> Result<String, MistralError>;
 }

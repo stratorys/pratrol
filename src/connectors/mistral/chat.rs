@@ -1,8 +1,14 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::MistralConnector;
-use crate::ports::mistral::{MistralError, MistralPort};
+use crate::ports::mistral::{
+    MistralError,
+    MistralPort,
+};
 
 #[derive(Serialize)]
 struct ChatRequest {
@@ -33,7 +39,10 @@ struct ChatChoiceMessage {
 
 #[async_trait]
 impl MistralPort for MistralConnector {
-    async fn chat_completion(&self, prompt: &str) -> Result<String, MistralError> {
+    async fn chat_completion(
+        &self,
+        prompt: &str,
+    ) -> Result<String, MistralError> {
         let request = ChatRequest {
             model: self.config.mistral_model.to_owned(),
             messages: vec![ChatMessage {

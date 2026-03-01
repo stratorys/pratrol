@@ -25,16 +25,28 @@ pub struct UserInfo {
 pub trait GitHubApp: Send + Sync {
     type Client: GitHubClient;
 
-    async fn installation_client(&self, installation_id: u64) -> Result<Self::Client, GitHubError>;
+    async fn installation_client(
+        &self,
+        installation_id: u64,
+    ) -> Result<Self::Client, GitHubError>;
 }
 
 #[async_trait]
 pub trait GitHubClient: Send + Sync {
-    async fn fetch_user(&self, login: &str) -> Result<UserInfo, GitHubError>;
+    async fn fetch_user(
+        &self,
+        login: &str,
+    ) -> Result<UserInfo, GitHubError>;
 
-    async fn fetch_events_count(&self, login: &str) -> Result<u32, GitHubError>;
+    async fn fetch_events_count(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError>;
 
-    async fn fetch_orgs_count(&self, login: &str) -> Result<u32, GitHubError>;
+    async fn fetch_orgs_count(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError>;
 
     async fn fetch_merged_prs(
         &self,
@@ -43,7 +55,10 @@ pub trait GitHubClient: Send + Sync {
         repo: &str,
     ) -> Result<u32, GitHubError>;
 
-    async fn fetch_merged_prs_global(&self, login: &str) -> Result<u32, GitHubError>;
+    async fn fetch_merged_prs_global(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError>;
 
     async fn fetch_diff(
         &self,

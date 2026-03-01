@@ -8,7 +8,10 @@ pub struct CommentService;
 impl CommentService {
     pub fn new() -> Self { Self }
 
-    pub fn render(&self, payload: &CommentPayload) -> String {
+    pub fn render(
+        &self,
+        payload: &CommentPayload,
+    ) -> String {
         let profile_badge = tier_badge(&payload.profile_tier_icon, &payload.profile_tier_label);
         let quality_badge = tier_badge(&payload.quality_tier_icon, &payload.quality_tier_label);
         let combined_badge = tier_badge(&payload.combined_tier_icon, &payload.combined_tier_label);
@@ -44,7 +47,10 @@ impl CommentService {
     }
 }
 
-fn tier_badge(icon: &str, label: &str) -> &'static str {
+fn tier_badge(
+    icon: &str,
+    label: &str,
+) -> &'static str {
     match icon {
         "+" => "🟢",
         "~" => "🟡",

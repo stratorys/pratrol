@@ -1,4 +1,9 @@
-use super::entity::{ProfileSignals, QualitySignals, Score, Tier};
+use super::entity::{
+    ProfileSignals,
+    QualitySignals,
+    Score,
+    Tier,
+};
 
 const ACCOUNT_AGE_DAYS_CAP: f64 = 1095.0;
 const PUBLIC_REPOS_CAP: f64 = 50.0;
@@ -33,7 +38,10 @@ pub struct ScoringService;
 impl ScoringService {
     pub fn new() -> Self { Self }
 
-    pub fn compute_profile_score(&self, signals: &ProfileSignals) -> Score {
+    pub fn compute_profile_score(
+        &self,
+        signals: &ProfileSignals,
+    ) -> Score {
         let account_age_norm = (signals.account_age_days as f64 / ACCOUNT_AGE_DAYS_CAP).min(1.0);
         let public_repos_norm = (signals.public_repos as f64 / PUBLIC_REPOS_CAP).min(1.0);
         let followers_norm = (signals.followers as f64 / FOLLOWERS_CAP).min(1.0);
@@ -51,10 +59,15 @@ impl ScoringService {
             + orgs_norm * WEIGHT_ORGS)
             * 100.0;
 
-        Score { value }
+        Score {
+            value,
+        }
     }
 
-    pub fn compute_quality_score(&self, signals: &QualitySignals) -> Score {
+    pub fn compute_quality_score(
+        &self,
+        signals: &QualitySignals,
+    ) -> Score {
         let value = ((signals.code_coherence / QUALITY_DIMENSION_MAX) * WEIGHT_CODE_COHERENCE
             + (signals.commit_quality / QUALITY_DIMENSION_MAX) * WEIGHT_COMMIT_QUALITY
             + ((QUALITY_DIMENSION_MAX - signals.risk_level) / QUALITY_DIMENSION_MAX)
@@ -63,16 +76,25 @@ impl ScoringService {
                 * WEIGHT_SUSPICIOUS_PATTERNS)
             * 100.0;
 
-        Score { value }
+        Score {
+            value,
+        }
     }
 
-    pub fn combine(&self, profile_score: f64, quality_score: f64) -> (f64, Tier) {
+    pub fn combine(
+        &self,
+        profile_score: f64,
+        quality_score: f64,
+    ) -> (f64, Tier) {
         let combined = WEIGHT_PROFILE * profile_score + WEIGHT_QUALITY * quality_score;
         let tier = self.tier_from_score(combined);
         (combined, tier)
     }
 
-    pub fn tier_from_score(&self, score: f64) -> Tier {
+    pub fn tier_from_score(
+        &self,
+        score: f64,
+    ) -> Tier {
         if score >= TIER_HIGH_MIN {
             Tier::High
         } else if score >= TIER_MEDIUM_MIN {

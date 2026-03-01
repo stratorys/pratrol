@@ -12,7 +12,10 @@ pub enum Tier {
 }
 
 impl fmt::Display for Tier {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
         match self {
             Tier::High => write!(f, "High"),
             Tier::Medium => write!(f, "Medium"),

@@ -1,13 +1,28 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use http::header::{ACCEPT, HeaderMap, HeaderValue};
+use http::header::{
+    ACCEPT,
+    HeaderMap,
+    HeaderValue,
+};
 use http_body_util::BodyExt;
-use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use serde::{Deserialize, Serialize};
+use percent_encoding::{
+    AsciiSet,
+    CONTROLS,
+    utf8_percent_encode,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use tracing::warn;
 
 use super::InstalledClient;
-use crate::ports::github::{GitHubClient, GitHubError, UserInfo};
+use crate::ports::github::{
+    GitHubClient,
+    GitHubError,
+    UserInfo,
+};
 
 const QUERY_ENCODE_SET: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'#').add(b'<').add(b'>');
 
@@ -47,7 +62,10 @@ struct CreateReviewResponse {}
 
 #[async_trait]
 impl GitHubClient for InstalledClient {
-    async fn fetch_user(&self, login: &str) -> Result<UserInfo, GitHubError> {
+    async fn fetch_user(
+        &self,
+        login: &str,
+    ) -> Result<UserInfo, GitHubError> {
         let route = format!("/users/{login}");
         let user: GitHubUser = self.octocrab.get(route, None::<&()>).await?;
 
@@ -64,13 +82,19 @@ impl GitHubClient for InstalledClient {
         })
     }
 
-    async fn fetch_events_count(&self, login: &str) -> Result<u32, GitHubError> {
+    async fn fetch_events_count(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError> {
         let route = format!("/users/{login}/events/public?per_page=100");
         let events: Vec<serde_json::Value> = self.octocrab.get(route, None::<&()>).await?;
         Ok(events.len() as u32)
     }
 
-    async fn fetch_orgs_count(&self, login: &str) -> Result<u32, GitHubError> {
+    async fn fetch_orgs_count(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError> {
         let route = format!("/users/{login}/orgs?per_page=100");
         let orgs: Vec<serde_json::Value> = self.octocrab.get(route, None::<&()>).await?;
         Ok(orgs.len() as u32)
@@ -86,7 +110,10 @@ impl GitHubClient for InstalledClient {
         self.search_issues_count(&query).await
     }
 
-    async fn fetch_merged_prs_global(&self, login: &str) -> Result<u32, GitHubError> {
+    async fn fetch_merged_prs_global(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError> {
         let query = format!("is:pr is:merged author:{login}");
         self.search_issues_count(&query).await
     }
@@ -180,7 +207,10 @@ impl GitHubClient for InstalledClient {
 }
 
 impl InstalledClient {
-    async fn search_issues_count(&self, query: &str) -> Result<u32, GitHubError> {
+    async fn search_issues_count(
+        &self,
+        query: &str,
+    ) -> Result<u32, GitHubError> {
         let encoded = utf8_percent_encode(query, QUERY_ENCODE_SET).to_string();
         let route = format!("/search/issues?q={encoded}&per_page=1");
         let result: SearchResult = self.octocrab.get(route, None::<&()>).await?;

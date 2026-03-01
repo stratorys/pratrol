@@ -1,15 +1,25 @@
 use std::sync::Arc;
 
-use tracing::{info, warn};
+use tracing::{
+    info,
+    warn,
+};
 
 use super::entity::TriageRequest;
 use super::error::TriageError;
 use crate::domains::analysis::service::AnalysisService;
 use crate::domains::comment::entity::CommentPayload;
 use crate::domains::comment::service::CommentService;
-use crate::domains::scoring::entity::{ProfileSignals, QualitySignals, Score};
+use crate::domains::scoring::entity::{
+    ProfileSignals,
+    QualitySignals,
+    Score,
+};
 use crate::domains::scoring::service::ScoringService;
-use crate::ports::github::{GitHubApp, GitHubClient};
+use crate::ports::github::{
+    GitHubApp,
+    GitHubClient,
+};
 use crate::ports::mistral::MistralPort;
 
 pub struct TriageService<G, M> {
@@ -21,7 +31,10 @@ pub struct TriageService<G, M> {
 }
 
 impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
-    pub fn new(github: Arc<G>, mistral: Arc<M>) -> Self {
+    pub fn new(
+        github: Arc<G>,
+        mistral: Arc<M>,
+    ) -> Self {
         Self {
             github,
             mistral,
@@ -31,7 +44,10 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
         }
     }
 
-    pub async fn execute(&self, request: TriageRequest) -> Result<(), TriageError> {
+    pub async fn execute(
+        &self,
+        request: TriageRequest,
+    ) -> Result<(), TriageError> {
         let client = self
             .github
             .installation_client(request.installation_id)
@@ -139,7 +155,9 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
 }
 
 fn fallback_analysis() -> (Score, String, String, String, bool) {
-    let score = Score { value: 50.0 };
+    let score = Score {
+        value: 50.0,
+    };
     let summary = "Analysis was partial due to an error contacting the AI service.".to_owned();
     let key_signal = "AI analysis unavailable.".to_owned();
     let recommendation = "Manual review recommended.".to_owned();
@@ -154,8 +172,16 @@ mod tests {
 
     use super::*;
     use crate::domains::triage::entity::TriageId;
-    use crate::ports::github::{GitHubApp, GitHubClient, GitHubError, UserInfo};
-    use crate::ports::mistral::{MistralError, MistralPort};
+    use crate::ports::github::{
+        GitHubApp,
+        GitHubClient,
+        GitHubError,
+        UserInfo,
+    };
+    use crate::ports::mistral::{
+        MistralError,
+        MistralPort,
+    };
 
     struct MockGitHubApp {
         should_fail: bool,
@@ -180,7 +206,10 @@ mod tests {
 
     #[async_trait]
     impl GitHubClient for MockGitHubClient {
-        async fn fetch_user(&self, _login: &str) -> Result<UserInfo, GitHubError> {
+        async fn fetch_user(
+            &self,
+            _login: &str,
+        ) -> Result<UserInfo, GitHubError> {
             Ok(UserInfo {
                 account_age_days: 365,
                 public_repos: 10,
@@ -188,9 +217,19 @@ mod tests {
             })
         }
 
-        async fn fetch_events_count(&self, _login: &str) -> Result<u32, GitHubError> { Ok(50) }
+        async fn fetch_events_count(
+            &self,
+            _login: &str,
+        ) -> Result<u32, GitHubError> {
+            Ok(50)
+        }
 
-        async fn fetch_orgs_count(&self, _login: &str) -> Result<u32, GitHubError> { Ok(2) }
+        async fn fetch_orgs_count(
+            &self,
+            _login: &str,
+        ) -> Result<u32, GitHubError> {
+            Ok(2)
+        }
 
         async fn fetch_merged_prs(
             &self,
@@ -201,7 +240,12 @@ mod tests {
             Ok(3)
         }
 
-        async fn fetch_merged_prs_global(&self, _login: &str) -> Result<u32, GitHubError> { Ok(15) }
+        async fn fetch_merged_prs_global(
+            &self,
+            _login: &str,
+        ) -> Result<u32, GitHubError> {
+            Ok(15)
+        }
 
         async fn fetch_diff(
             &self,
@@ -238,7 +282,10 @@ mod tests {
 
     #[async_trait]
     impl MistralPort for MockMistral {
-        async fn chat_completion(&self, _prompt: &str) -> Result<String, MistralError> {
+        async fn chat_completion(
+            &self,
+            _prompt: &str,
+        ) -> Result<String, MistralError> {
             if self.should_fail {
                 return Err(MistralError::EmptyResponse);
             }
@@ -259,8 +306,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_success() {
-        let github = Arc::new(MockGitHubApp { should_fail: false });
-        let mistral = Arc::new(MockMistral { should_fail: false });
+        let github = Arc::new(MockGitHubApp {
+            should_fail: false,
+        });
+        let mistral = Arc::new(MockMistral {
+            should_fail: false,
+        });
         let service = TriageService::new(github, mistral);
 
         let result = service.execute(sample_request()).await;
@@ -269,8 +320,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_mistral_failure_uses_fallback() {
-        let github = Arc::new(MockGitHubApp { should_fail: false });
-        let mistral = Arc::new(MockMistral { should_fail: true });
+        let github = Arc::new(MockGitHubApp {
+            should_fail: false,
+        });
+        let mistral = Arc::new(MockMistral {
+            should_fail: true,
+        });
         let service = TriageService::new(github, mistral);
 
         let result = service.execute(sample_request()).await;
@@ -282,8 +337,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_github_failure_propagates() {
-        let github = Arc::new(MockGitHubApp { should_fail: true });
-        let mistral = Arc::new(MockMistral { should_fail: false });
+        let github = Arc::new(MockGitHubApp {
+            should_fail: true,
+        });
+        let mistral = Arc::new(MockMistral {
+            should_fail: false,
+        });
         let service = TriageService::new(github, mistral);
 
         let result = service.execute(sample_request()).await;

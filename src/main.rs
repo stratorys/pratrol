@@ -8,7 +8,10 @@ use std::sync::Arc;
 
 use rustls::crypto::CryptoProvider;
 use rustls::crypto::ring::default_provider;
-use tracing::{error, info};
+use tracing::{
+    error,
+    info,
+};
 use tracing_subscriber::EnvFilter;
 
 use crate::config::Config;

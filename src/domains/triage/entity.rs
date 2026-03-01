@@ -10,7 +10,12 @@ impl TriageId {
 }
 
 impl fmt::Display for TriageId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { self.0.fmt(f) }
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 pub struct TriageRequest {

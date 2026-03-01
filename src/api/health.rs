@@ -7,7 +7,10 @@ pub async fn handle_health() -> impl IntoResponse { Json(serde_json::json!({})) 
 mod tests {
     use axum::Router;
     use axum::body::Body;
-    use axum::http::{Request, StatusCode};
+    use axum::http::{
+        Request,
+        StatusCode,
+    };
     use axum::routing::get;
     use http_body_util::BodyExt;
     use tower::util::ServiceExt;

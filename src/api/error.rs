@@ -1,5 +1,8 @@
 use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::{
+    IntoResponse,
+    Response,
+};
 use tracing::error;
 
 use crate::domains::triage::error::TriageError;
