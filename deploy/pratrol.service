@@ -1,0 +1,25 @@
+[Unit]
+Description=Pratrol, your intelligent PR triage for modern maintainers.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pratrol
+Group=pratrol
+WorkingDirectory=/opt/pratrol
+ExecStart=/opt/pratrol/pratrol
+Restart=on-failure
+RestartSec=5
+
+EnvironmentFile=/etc/pratrol/pratrol.env
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadOnlyPaths=/etc/pratrol
+
+[Install]
+WantedBy=multi-user.target

@@ -7,5 +7,5 @@ use axum::routing::post;
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/webhooks/github", post(webhook::handler::handle_webhook))
+    Router::new().route("/webhook/github", post(webhook::handler::handle_webhook))
 }
