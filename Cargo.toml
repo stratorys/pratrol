@@ -42,3 +42,6 @@ single_char_lifetime_names = "deny"
 str_to_string = "deny"
 unwrap_used = "deny"
 struct_field_names = "allow"
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }
