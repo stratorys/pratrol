@@ -81,4 +81,34 @@ pub trait GitHubClient: Send + Sync {
         pr_number: u64,
         body: &str,
     ) -> Result<(), GitHubError>;
+
+    async fn fetch_codeowners(
+        &self,
+        owner: &str,
+        repo: &str,
+    ) -> Result<Option<String>, GitHubError>;
+
+    async fn fetch_pr_files(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+    ) -> Result<Vec<String>, GitHubError>;
+
+    async fn fetch_file_contributors(
+        &self,
+        owner: &str,
+        repo: &str,
+        path: &str,
+        limit: u32,
+    ) -> Result<Vec<String>, GitHubError>;
+
+    async fn request_reviewers(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+        users: &[String],
+        teams: &[String],
+    ) -> Result<(), GitHubError>;
 }

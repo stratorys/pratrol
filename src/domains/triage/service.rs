@@ -10,6 +10,7 @@ use super::error::TriageError;
 use crate::domains::analysis::service::AnalysisService;
 use crate::domains::comment::entity::CommentPayload;
 use crate::domains::comment::service::CommentService;
+use crate::domains::reviewer::service::ReviewerService;
 use crate::domains::scoring::entity::{
     ProfileSignals,
     QualitySignals,
@@ -28,6 +29,7 @@ pub struct TriageService<G, M> {
     scoring: ScoringService,
     analysis: AnalysisService,
     comment: CommentService,
+    reviewer: ReviewerService,
 }
 
 impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
@@ -41,6 +43,7 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             scoring: ScoringService::new(),
             analysis: AnalysisService::new(),
             comment: CommentService::new(),
+            reviewer: ReviewerService::new(),
         }
     }
 
@@ -149,6 +152,22 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             combined_score,
             tier = %combined_tier,
         );
+
+        match self
+            .reviewer
+            .assign_reviewers(&client, owner, repo, pr_number, login)
+            .await
+        {
+            Ok(()) => {}
+            Err(error) => {
+                warn!(
+                    message = "Failed to assign reviewers.",
+                    %error,
+                    triage_id = %triage_id,
+                    pr_number,
+                );
+            }
+        }
 
         Ok(())
     }
@@ -271,6 +290,44 @@ mod tests {
             _repo: &str,
             _pr_number: u64,
             _body: &str,
+        ) -> Result<(), GitHubError> {
+            Ok(())
+        }
+
+        async fn fetch_codeowners(
+            &self,
+            _owner: &str,
+            _repo: &str,
+        ) -> Result<Option<String>, GitHubError> {
+            Ok(None)
+        }
+
+        async fn fetch_pr_files(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _pr_number: u64,
+        ) -> Result<Vec<String>, GitHubError> {
+            Ok(Vec::new())
+        }
+
+        async fn fetch_file_contributors(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _path: &str,
+            _limit: u32,
+        ) -> Result<Vec<String>, GitHubError> {
+            Ok(Vec::new())
+        }
+
+        async fn request_reviewers(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _pr_number: u64,
+            _users: &[String],
+            _teams: &[String],
         ) -> Result<(), GitHubError> {
             Ok(())
         }
