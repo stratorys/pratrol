@@ -8,7 +8,7 @@ use super::entity::{
 const ACCOUNT_AGE_DAYS_CAP: f64 = 1095.0;
 const PUBLIC_REPOS_CAP: f64 = 50.0;
 const FOLLOWERS_CAP: f64 = 100.0;
-const CONTRIBUTIONS_CAP: f64 = 200.0;
+const CONTRIBUTIONS_CAP: f64 = 300.0;
 const PRS_TARGET_CAP: f64 = 10.0;
 const PRS_ELSEWHERE_CAP: f64 = 50.0;
 const ORGS_CAP: f64 = 5.0;

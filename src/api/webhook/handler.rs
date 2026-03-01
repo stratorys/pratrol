@@ -43,7 +43,13 @@ pub async fn handle_webhook(
 
     let event: WebhookEvent = serde_json::from_slice(&body)?;
 
-    if event.action != "opened" {
+    let should_triage = match event.action.as_str() {
+        "opened" => !event.pull_request.draft,
+        "ready_for_review" => true,
+        _ => false,
+    };
+
+    if !should_triage {
         return Ok(StatusCode::OK);
     }
 

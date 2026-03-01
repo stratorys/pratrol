@@ -22,6 +22,8 @@ pub struct Repository {
 pub struct PullRequestPayload {
     pub number: u64,
     pub user: PullRequestUser,
+    #[serde(default)]
+    pub draft: bool,
 }
 
 #[derive(Debug, Deserialize)]
