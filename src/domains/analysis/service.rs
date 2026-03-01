@@ -40,6 +40,8 @@ impl AnalysisService {
             risk_level: parsed.risk_level,
             suspicious_patterns: parsed.suspicious_patterns,
             summary: parsed.summary,
+            key_signal: parsed.key_signal,
+            recommendation: parsed.recommendation,
         })
     }
 }
@@ -51,6 +53,10 @@ struct RawAnalysis {
     risk_level: f64,
     suspicious_patterns: f64,
     summary: String,
+    #[serde(default)]
+    key_signal: String,
+    #[serde(default)]
+    recommendation: String,
 }
 
 fn validate_range(field: &str, value: f64) -> Result<(), AnalysisError> {

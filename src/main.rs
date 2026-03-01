@@ -48,7 +48,7 @@ async fn main() {
         }
     };
 
-    let mistral = match MistralConnector::new(config.mistral_api_key) {
+    let mistral = match MistralConnector::new(config.clone()) {
         Ok(connector) => Arc::new(connector),
         Err(error) => {
             error!(message = "Failed to initialize Mistral connector.", %error);

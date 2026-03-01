@@ -4,4 +4,6 @@ pub struct AnalysisResult {
     pub risk_level: f64,
     pub suspicious_patterns: f64,
     pub summary: String,
+    pub key_signal: String,
+    pub recommendation: String,
 }

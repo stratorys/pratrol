@@ -3,7 +3,7 @@ use chrono::Utc;
 use http::header::{ACCEPT, HeaderMap, HeaderValue};
 use http_body_util::BodyExt;
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use super::InstalledClient;
@@ -35,6 +35,15 @@ struct CommitItem {
 struct CommitDetail {
     message: String,
 }
+
+#[derive(Serialize)]
+struct CreateReviewRequest {
+    body: String,
+    event: String,
+}
+
+#[derive(Deserialize)]
+struct CreateReviewResponse {}
 
 #[async_trait]
 impl GitHubClient for InstalledClient {
@@ -151,17 +160,20 @@ impl GitHubClient for InstalledClient {
         Ok(messages)
     }
 
-    async fn post_comment(
+    async fn post_review(
         &self,
         owner: &str,
         repo: &str,
         pr_number: u64,
         body: &str,
     ) -> Result<(), GitHubError> {
-        self.octocrab
-            .issues(owner, repo)
-            .create_comment(pr_number, body)
-            .await?;
+        let route = format!("/repos/{owner}/{repo}/pulls/{pr_number}/reviews");
+        let payload = CreateReviewRequest {
+            body: body.to_owned(),
+            event: "COMMENT".to_owned(),
+        };
+
+        let _: CreateReviewResponse = self.octocrab.post(route, Some(&payload)).await?;
 
         Ok(())
     }

@@ -67,7 +67,7 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
 
         let prompt = self.analysis.build_prompt(&diff, &commits);
 
-        let (quality_score, summary, analysis_partial) =
+        let (quality_score, summary, key_signal, recommendation, analysis_partial) =
             match self.mistral.chat_completion(&prompt).await {
                 Ok(raw_response) => match self.analysis.parse_response(&raw_response) {
                     Ok(analysis) => {
@@ -78,7 +78,13 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
                             suspicious_patterns: analysis.suspicious_patterns,
                         };
                         let score = self.scoring.compute_quality_score(&quality_signals);
-                        (score, analysis.summary, false)
+                        (
+                            score,
+                            analysis.summary,
+                            analysis.key_signal,
+                            analysis.recommendation,
+                            false,
+                        )
                     }
                     Err(error) => {
                         warn!(message = "Failed to parse Mistral response.", %error);
@@ -109,17 +115,19 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             combined_tier_label: combined_tier.to_string(),
             combined_tier_icon: combined_tier.icon().to_owned(),
             summary,
+            key_signal,
+            recommendation,
             analysis_partial,
         };
 
         let markdown = self.comment.render(&comment_payload);
 
         client
-            .post_comment(owner, repo, pr_number, &markdown)
+            .post_review(owner, repo, pr_number, &markdown)
             .await?;
 
         info!(
-            message = "Posted triage comment.",
+            message = "Posted triage review.",
             triage_id = %triage_id,
             pr_number,
             combined_score,
@@ -130,10 +138,12 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
     }
 }
 
-fn fallback_analysis() -> (Score, String, bool) {
+fn fallback_analysis() -> (Score, String, String, String, bool) {
     let score = Score { value: 50.0 };
     let summary = "Analysis was partial due to an error contacting the AI service.".to_owned();
-    (score, summary, true)
+    let key_signal = "AI analysis unavailable.".to_owned();
+    let recommendation = "Manual review recommended.".to_owned();
+    (score, summary, key_signal, recommendation, true)
 }
 
 #[cfg(test)]
@@ -211,7 +221,7 @@ mod tests {
             Ok(vec!["Initial commit".to_owned()])
         }
 
-        async fn post_comment(
+        async fn post_review(
             &self,
             _owner: &str,
             _repo: &str,
@@ -232,7 +242,7 @@ mod tests {
             if self.should_fail {
                 return Err(MistralError::EmptyResponse);
             }
-            Ok(r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "A good PR."}"#.to_owned())
+            Ok(r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "A good PR.", "key_signal": "Clean code.", "recommendation": "Approve."}"#.to_owned())
         }
     }
 

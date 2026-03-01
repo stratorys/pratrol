@@ -35,7 +35,7 @@ struct ChatChoiceMessage {
 impl MistralPort for MistralConnector {
     async fn chat_completion(&self, prompt: &str) -> Result<String, MistralError> {
         let request = ChatRequest {
-            model: "mistral-small-latest".to_owned(),
+            model: self.config.mistral_model.to_owned(),
             messages: vec![ChatMessage {
                 role: "user".to_owned(),
                 content: prompt.to_owned(),
@@ -45,7 +45,10 @@ impl MistralPort for MistralConnector {
         let response = self
             .http_client
             .post("https://api.mistral.ai/v1/chat/completions")
-            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header(
+                "Authorization",
+                format!("Bearer {}", self.config.mistral_api_key),
+            )
             .json(&request)
             .send()
             .await?

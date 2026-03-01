@@ -18,6 +18,7 @@ export GITHUB_PRIVATE_KEY_PATH=./private-key.pem
 export GITHUB_WEBHOOK_SECRET=your_secret
 export MISTRAL_API_KEY=your_key
 export RUST_LOG=debug
+export MISTRAL_MODEL=mistral-small-latest
 
 cargo run
 ```

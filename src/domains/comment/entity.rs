@@ -9,5 +9,7 @@ pub struct CommentPayload {
     pub combined_tier_label: String,
     pub combined_tier_icon: String,
     pub summary: String,
+    pub key_signal: String,
+    pub recommendation: String,
     pub analysis_partial: bool,
 }
