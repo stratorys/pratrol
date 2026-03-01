@@ -32,6 +32,14 @@ impl Tier {
             Tier::Low => "-",
         }
     }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Tier::High => "needs-review",
+            Tier::Medium => "suspicious",
+            Tier::Low => "spam",
+        }
+    }
 }
 
 pub struct ProfileSignals {

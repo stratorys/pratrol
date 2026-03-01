@@ -60,6 +60,11 @@ struct CreateReviewRequest {
 #[derive(Deserialize)]
 struct CreateReviewResponse {}
 
+#[derive(Serialize)]
+struct AddLabelsRequest {
+    labels: Vec<String>,
+}
+
 #[async_trait]
 impl GitHubClient for InstalledClient {
     async fn fetch_user(
@@ -201,6 +206,23 @@ impl GitHubClient for InstalledClient {
         };
 
         let _: CreateReviewResponse = self.octocrab.post(route, Some(&payload)).await?;
+
+        Ok(())
+    }
+
+    async fn add_labels(
+        &self,
+        owner: &str,
+        repo: &str,
+        pr_number: u64,
+        labels: Vec<String>,
+    ) -> Result<(), GitHubError> {
+        let route = format!("/repos/{owner}/{repo}/issues/{pr_number}/labels");
+        let payload = AddLabelsRequest {
+            labels,
+        };
+
+        let _: Vec<serde_json::Value> = self.octocrab.post(route, Some(&payload)).await?;
 
         Ok(())
     }

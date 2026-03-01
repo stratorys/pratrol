@@ -142,6 +142,21 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             .post_review(owner, repo, pr_number, &markdown)
             .await?;
 
+        if let Err(error) = client
+            .add_labels(owner, repo, pr_number, vec![
+                combined_tier.label().to_owned(),
+            ])
+            .await
+        {
+            warn!(
+                message = "Failed to add label to PR.",
+                triage_id = %triage_id,
+                pr_number,
+                label = combined_tier.label(),
+                %error,
+            );
+        }
+
         info!(
             message = "Posted triage review.",
             triage_id = %triage_id,
@@ -271,6 +286,16 @@ mod tests {
             _repo: &str,
             _pr_number: u64,
             _body: &str,
+        ) -> Result<(), GitHubError> {
+            Ok(())
+        }
+
+        async fn add_labels(
+            &self,
+            _owner: &str,
+            _repo: &str,
+            _pr_number: u64,
+            _labels: Vec<String>,
         ) -> Result<(), GitHubError> {
             Ok(())
         }
