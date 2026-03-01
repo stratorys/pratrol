@@ -11,6 +11,12 @@ export default defineNuxtConfig({
         { name: 'description', content: 'Triage pull requests by risk, not by timestamp. AI-assisted triage for GitHub teams.' },
         { name: 'theme-color', content: '#f8fafc' }
       ],
+      script: [
+        {
+          type: 'text/javascript',
+          innerHTML: 'window.$crisp=[];window.CRISP_WEBSITE_ID="e64c14d7-fa4f-47b9-ac74-ff1520e2c842";(function(){var d=document;var s=d.createElement("script");s.src="https://client.crisp.chat/l.js";s.async=1;d.head.appendChild(s);})();'
+        }
+      ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/logo.png' }
       ]
