@@ -13,7 +13,11 @@ pub struct AnalysisService;
 impl AnalysisService {
     pub fn new() -> Self { Self }
 
-    pub fn build_prompt(&self, diff: &str, commits: &[String]) -> String {
+    pub fn build_prompt(
+        &self,
+        diff: &str,
+        commits: &[String],
+    ) -> String {
         let mut commits_text = String::with_capacity(commits.len() * 80);
         for (index, message) in commits.iter().enumerate() {
             let _ = writeln!(commits_text, "{}. {}", index + 1, message);
@@ -24,7 +28,10 @@ impl AnalysisService {
             .replace("{{commits}}", &commits_text)
     }
 
-    pub fn parse_response(&self, raw: &str) -> Result<AnalysisResult, AnalysisError> {
+    pub fn parse_response(
+        &self,
+        raw: &str,
+    ) -> Result<AnalysisResult, AnalysisError> {
         let trimmed = extract_json(raw);
 
         let parsed: RawAnalysis = serde_json::from_str(trimmed)?;
@@ -59,7 +66,10 @@ struct RawAnalysis {
     recommendation: String,
 }
 
-fn validate_range(field: &str, value: f64) -> Result<(), AnalysisError> {
+fn validate_range(
+    field: &str,
+    value: f64,
+) -> Result<(), AnalysisError> {
     if !(0.0..=10.0).contains(&value) {
         warn!(
             message = "Analysis field out of range.",

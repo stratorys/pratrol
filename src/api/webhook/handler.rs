@@ -1,15 +1,27 @@
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{
+    HeaderMap,
+    StatusCode,
+};
 use axum::response::IntoResponse;
-use hmac::{Hmac, Mac};
+use hmac::{
+    Hmac,
+    Mac,
+};
 use sha2::Sha256;
-use tracing::{error, info};
+use tracing::{
+    error,
+    info,
+};
 
 use crate::AppState;
 use crate::api::error::ApiError;
 use crate::api::webhook::dto::WebhookEvent;
-use crate::domains::triage::entity::{TriageId, TriageRequest};
+use crate::domains::triage::entity::{
+    TriageId,
+    TriageRequest,
+};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -78,7 +90,11 @@ fn try_into_triage_request(event: &WebhookEvent) -> Option<TriageRequest> {
     })
 }
 
-fn verify_signature(secret: &str, headers: &HeaderMap, body: &[u8]) -> Result<(), ApiError> {
+fn verify_signature(
+    secret: &str,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<(), ApiError> {
     let signature_header = headers
         .get("X-Hub-Signature-256")
         .and_then(|v| v.to_str().ok())
@@ -111,12 +127,18 @@ fn split_full_name(full_name: &str) -> Option<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use hmac::{Hmac, Mac};
+    use hmac::{
+        Hmac,
+        Mac,
+    };
     use sha2::Sha256;
 
     use super::*;
 
-    fn compute_signature(secret: &str, body: &[u8]) -> String {
+    fn compute_signature(
+        secret: &str,
+        body: &[u8],
+    ) -> String {
         let mut mac = <Hmac<Sha256>>::new_from_slice(secret.as_bytes())
             .expect("HMAC key should be valid in test");
         mac.update(body);

@@ -1,5 +1,8 @@
 use std::net::SocketAddr;
-use std::{env, fs};
+use std::{
+    env,
+    fs,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {

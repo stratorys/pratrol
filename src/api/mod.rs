@@ -3,7 +3,10 @@ pub mod health;
 pub mod webhook;
 
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{
+    get,
+    post,
+};
 
 use crate::AppState;
 
