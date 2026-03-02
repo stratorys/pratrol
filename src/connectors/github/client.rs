@@ -168,11 +168,19 @@ impl GitHubClient for InstalledClient {
             Err(octocrab::Error::GitHub {
                 ref source, ..
             }) if source.status_code == http::StatusCode::NOT_FOUND => {
-                self.octocrab
+                let create_result = self
+                    .octocrab
                     .issues(owner, repo)
                     .create_label(&name, &color, &description)
-                    .await?;
-                Ok(())
+                    .await;
+
+                match create_result {
+                    Ok(_) => Ok(()),
+                    Err(octocrab::Error::GitHub {
+                        ref source, ..
+                    }) if source.status_code == http::StatusCode::UNPROCESSABLE_ENTITY => Ok(()),
+                    Err(error) => Err(GitHubError::Api(error)),
+                }
             }
             Err(error) => Err(GitHubError::Api(error)),
         }
