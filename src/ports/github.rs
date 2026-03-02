@@ -20,6 +20,17 @@ pub struct CommitInfo {
     pub message: String,
 }
 
+pub struct RejectedPrInfo {
+    pub number: u64,
+    pub title: String,
+    pub html_url: String,
+}
+
+pub struct RejectedPrSearchResult {
+    pub total_count: u32,
+    pub items: Vec<RejectedPrInfo>,
+}
+
 #[cfg_attr(test, mockall::automock(type Client = MockGitHubClient;))]
 #[async_trait]
 pub trait GitHubApp: Send + Sync {
@@ -107,4 +118,23 @@ pub trait GitHubClient: Send + Sync {
         color: String,
         description: String,
     ) -> Result<(), GitHubError>;
+
+    async fn search_rejected_prs_by_author(
+        &self,
+        login: &str,
+        owner: &str,
+        repo: &str,
+    ) -> Result<RejectedPrSearchResult, GitHubError>;
+
+    async fn search_rejected_prs_by_title(
+        &self,
+        keywords: &str,
+        owner: &str,
+        repo: &str,
+    ) -> Result<RejectedPrSearchResult, GitHubError>;
+
+    async fn search_rejected_prs_by_author_global(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError>;
 }

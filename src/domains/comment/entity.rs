@@ -12,4 +12,5 @@ pub struct CommentPayload {
     pub key_signal: String,
     pub recommendation: String,
     pub analysis_partial: bool,
+    pub history_section: String,
 }

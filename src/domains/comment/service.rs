@@ -39,6 +39,10 @@ impl CommentService {
             .replace("{{key_signal}}", &payload.key_signal)
             .replace("{{recommendation}}", &payload.recommendation);
 
+        if !payload.history_section.is_empty() {
+            output.push_str(&payload.history_section);
+        }
+
         if payload.analysis_partial {
             output.push_str(PARTIAL_NOTE);
         }
@@ -83,6 +87,7 @@ mod tests {
             key_signal: "Clean separation of concerns.".to_owned(),
             recommendation: "Approve after verifying tests pass.".to_owned(),
             analysis_partial: partial,
+            history_section: String::new(),
         }
     }
 

@@ -25,4 +25,5 @@ pub struct TriageRequest {
     pub repo: String,
     pub pr_number: u64,
     pub author_login: String,
+    pub title: String,
 }

@@ -10,6 +10,11 @@ use super::error::TriageError;
 use crate::domains::analysis::service::AnalysisService;
 use crate::domains::comment::entity::CommentPayload;
 use crate::domains::comment::service::CommentService;
+use crate::domains::history::entity::HistorySignals;
+use crate::domains::history::service::{
+    HistoryService,
+    extract_title_keywords,
+};
 use crate::domains::scoring::entity::{
     ProfileSignals,
     QualitySignals,
@@ -22,12 +27,17 @@ use crate::ports::github::{
 };
 use crate::ports::mistral::MistralPort;
 
+const REPEAT_OFFENDER_LABEL: &str = "patrol:repeat-offender";
+const REPEAT_OFFENDER_COLOR: &str = "e4a012";
+const REPEAT_OFFENDER_DESCRIPTION: &str = "Author has multiple closed-without-merge PRs";
+
 pub struct TriageService<G, M> {
     github: Arc<G>,
     mistral: Arc<M>,
     scoring: ScoringService,
     analysis: AnalysisService,
     comment: CommentService,
+    history: HistoryService,
 }
 
 impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
@@ -41,6 +51,7 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             scoring: ScoringService::new(),
             analysis: AnalysisService::new(),
             comment: CommentService::new(),
+            history: HistoryService::new(),
         }
     }
 
@@ -78,6 +89,10 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             client.fetch_commits(owner, repo, pr_number),
         )?;
 
+        let history_signals = self
+            .fetch_history_signals(&client, login, owner, repo, &request.title)
+            .await;
+
         let profile_signals = ProfileSignals {
             account_age_days: user.account_age_days,
             public_repos: user.public_repos,
@@ -93,57 +108,64 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
         let commit_messages: Vec<&str> = commits.iter().map(|ci| ci.message.as_str()).collect();
         let prompt = self.analysis.build_prompt(&diff, &commit_messages);
 
-        let (quality_score, summary, key_signal, recommendation, analysis_partial) =
-            match self.mistral.chat_completion(&prompt).await {
-                Ok(raw_response) => match self.analysis.parse_response(&raw_response) {
-                    Ok(analysis) => {
-                        let quality_signals = QualitySignals {
-                            code_coherence: analysis.code_coherence,
-                            commit_quality: analysis.commit_quality,
-                            risk_level: analysis.risk_level,
-                            suspicious_patterns: analysis.suspicious_patterns,
-                        };
-                        let score = self.scoring.compute_quality_score(&quality_signals);
-                        (
-                            score,
-                            analysis.summary,
-                            analysis.key_signal,
-                            analysis.recommendation,
-                            false,
-                        )
+        let analysis_result = match self.mistral.chat_completion(&prompt).await {
+            Ok(raw_response) => match self.analysis.parse_response(&raw_response) {
+                Ok(analysis) => {
+                    let quality_signals = QualitySignals {
+                        code_coherence: analysis.code_coherence,
+                        commit_quality: analysis.commit_quality,
+                        risk_level: analysis.risk_level,
+                        suspicious_patterns: analysis.suspicious_patterns,
+                    };
+                    let score = self.scoring.compute_quality_score(&quality_signals);
+                    FallbackAnalysis {
+                        quality_score: score,
+                        summary: analysis.summary,
+                        key_signal: analysis.key_signal,
+                        recommendation: analysis.recommendation,
+                        analysis_partial: false,
                     }
-                    Err(error) => {
-                        warn!(message = "Failed to parse Mistral response.", %error);
-                        fallback_analysis()
-                    }
-                },
-                Err(error) => {
-                    warn!(message = "Mistral API call failed.", %error);
-                    fallback_analysis()
                 }
-            };
+                Err(error) => {
+                    warn!(message = "Failed to parse Mistral response.", %error);
+                    FallbackAnalysis::default()
+                }
+            },
+            Err(error) => {
+                warn!(message = "Mistral API call failed.", %error);
+                FallbackAnalysis::default()
+            }
+        };
 
-        let (combined_score, combined_tier) = self
+        let history_result = self.history.evaluate(&history_signals, pr_number);
+
+        let (raw_combined_score, _) = self
             .scoring
-            .combine(profile_score.value, quality_score.value);
+            .combine(profile_score.value, analysis_result.quality_score.value);
+
+        let adjusted_score = (raw_combined_score - history_result.penalty).max(0.0);
+        let combined_tier = self.scoring.tier_from_score(adjusted_score);
 
         let profile_tier = self.scoring.tier_from_score(profile_score.value);
-        let quality_tier = self.scoring.tier_from_score(quality_score.value);
+        let quality_tier = self
+            .scoring
+            .tier_from_score(analysis_result.quality_score.value);
 
         let comment_payload = CommentPayload {
             profile_score: profile_score.value,
             profile_tier_label: profile_tier.to_string(),
             profile_tier_icon: profile_tier.icon().to_owned(),
-            quality_score: quality_score.value,
+            quality_score: analysis_result.quality_score.value,
             quality_tier_label: quality_tier.to_string(),
             quality_tier_icon: quality_tier.icon().to_owned(),
-            combined_score,
+            combined_score: adjusted_score,
             combined_tier_label: combined_tier.to_string(),
             combined_tier_icon: combined_tier.icon().to_owned(),
-            summary,
-            key_signal,
-            recommendation,
-            analysis_partial,
+            summary: analysis_result.summary,
+            key_signal: analysis_result.key_signal,
+            recommendation: analysis_result.recommendation,
+            analysis_partial: analysis_result.analysis_partial,
+            history_section: history_result.history_section,
         };
 
         let markdown = self.comment.render(&comment_payload);
@@ -154,30 +176,48 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             .post_review(owner, repo, pr_number, &head_commit.sha, &markdown)
             .await?;
 
+        let mut labels_to_apply = vec![combined_tier.label().to_owned()];
+
+        if history_result.is_repeat_offender {
+            labels_to_apply.push(REPEAT_OFFENDER_LABEL.to_owned());
+        }
+
         let label_name = combined_tier.label().to_owned();
         let label_color = combined_tier.label_color().to_owned();
         let label_description = combined_tier.label_description().to_owned();
 
         match client
-            .ensure_label(
-                owner,
-                repo,
-                label_name.clone(),
-                label_color,
-                label_description,
-            )
+            .ensure_label(owner, repo, label_name, label_color, label_description)
             .await
         {
             Ok(()) => {
+                if history_result.is_repeat_offender
+                    && let Err(error) = client
+                        .ensure_label(
+                            owner,
+                            repo,
+                            REPEAT_OFFENDER_LABEL.to_owned(),
+                            REPEAT_OFFENDER_COLOR.to_owned(),
+                            REPEAT_OFFENDER_DESCRIPTION.to_owned(),
+                        )
+                        .await
+                {
+                    warn!(
+                        message = "Failed to ensure repeat-offender label exists.",
+                        triage_id = %triage_id,
+                        pr_number,
+                        %error,
+                    );
+                }
+
                 if let Err(error) = client
-                    .add_labels(owner, repo, pr_number, vec![label_name])
+                    .add_labels(owner, repo, pr_number, labels_to_apply)
                     .await
                 {
                     warn!(
-                        message = "Failed to add label to PR.",
+                        message = "Failed to add labels to PR.",
                         triage_id = %triage_id,
                         pr_number,
-                        label = combined_tier.label(),
                         %error,
                     );
                 }
@@ -197,22 +237,92 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
             message = "Posted triage review.",
             triage_id = %triage_id,
             pr_number,
-            combined_score,
+            combined_score = adjusted_score,
             tier = %combined_tier,
+            history_penalty = history_result.penalty,
+            repeat_offender = history_result.is_repeat_offender,
         );
 
         Ok(())
     }
+
+    async fn fetch_history_signals(
+        &self,
+        client: &G::Client,
+        login: &str,
+        owner: &str,
+        repo: &str,
+        title: &str,
+    ) -> HistorySignals {
+        let author_repo_future = client.search_rejected_prs_by_author(login, owner, repo);
+        let global_future = client.search_rejected_prs_by_author_global(login);
+
+        let title_keywords = extract_title_keywords(title);
+
+        match &title_keywords {
+            Some(keywords) => {
+                let title_future = client.search_rejected_prs_by_title(keywords, owner, repo);
+                match tokio::try_join!(author_repo_future, title_future, global_future) {
+                    Ok((author_repo, title_result, global_count)) => HistorySignals {
+                        rejected_by_author_in_repo: author_repo.total_count,
+                        rejected_by_author_in_repo_items: author_repo.items,
+                        rejected_by_title_in_repo: title_result.total_count,
+                        rejected_by_title_in_repo_items: title_result.items,
+                        rejected_by_author_global: global_count,
+                    },
+                    Err(error) => {
+                        warn!(message = "History search failed, skipping history signals.", %error);
+                        empty_history_signals()
+                    }
+                }
+            }
+            None => match tokio::try_join!(author_repo_future, global_future) {
+                Ok((author_repo, global_count)) => HistorySignals {
+                    rejected_by_author_in_repo: author_repo.total_count,
+                    rejected_by_author_in_repo_items: author_repo.items,
+                    rejected_by_title_in_repo: 0,
+                    rejected_by_title_in_repo_items: vec![],
+                    rejected_by_author_global: global_count,
+                },
+                Err(error) => {
+                    warn!(message = "History search failed, skipping history signals.", %error);
+                    empty_history_signals()
+                }
+            },
+        }
+    }
 }
 
-fn fallback_analysis() -> (Score, String, String, String, bool) {
-    let score = Score {
-        value: 50.0,
-    };
-    let summary = "Analysis was partial due to an error contacting the AI service.".to_owned();
-    let key_signal = "AI analysis unavailable.".to_owned();
-    let recommendation = "Manual review recommended.".to_owned();
-    (score, summary, key_signal, recommendation, true)
+struct FallbackAnalysis {
+    quality_score: Score,
+    summary: String,
+    key_signal: String,
+    recommendation: String,
+    analysis_partial: bool,
+}
+
+impl FallbackAnalysis {
+    fn default() -> Self {
+        Self {
+            quality_score: Score {
+                value: 50.0,
+            },
+            summary: "Analysis was partial due to an error contacting the AI service.".to_owned(),
+            key_signal: "AI analysis unavailable.".to_owned(),
+            recommendation: "Manual review recommended.".to_owned(),
+            analysis_partial: true,
+        }
+    }
+}
+
+fn empty_history_signals() -> HistorySignals {
+    HistorySignals {
+        rejected_by_author_in_repo: 0,
+        rejected_by_author_in_repo_items: vec![],
+        rejected_by_title_in_repo: 0,
+        rejected_by_title_in_repo_items: vec![],
+        rejected_by_author_global: 0,
+    }
 }
 
 #[cfg(test)]
@@ -225,6 +335,7 @@ mod tests {
         CommitInfo,
         MockGitHubApp,
         MockGitHubClient,
+        RejectedPrSearchResult,
         UserInfo,
     };
     use crate::ports::mistral::MockMistralPort;
@@ -237,6 +348,14 @@ mod tests {
             repo: "repo".to_owned(),
             pr_number: 42,
             author_login: "user".to_owned(),
+            title: "Add authentication middleware".to_owned(),
+        }
+    }
+
+    fn empty_search_result() -> RejectedPrSearchResult {
+        RejectedPrSearchResult {
+            total_count: 0,
+            items: vec![],
         }
     }
 
@@ -274,6 +393,15 @@ mod tests {
             .expect_ensure_label()
             .returning(|_, _, _, _, _| Ok(()));
         client.expect_add_labels().returning(|_, _, _, _| Ok(()));
+        client
+            .expect_search_rejected_prs_by_author()
+            .returning(|_, _, _| Ok(empty_search_result()));
+        client
+            .expect_search_rejected_prs_by_title()
+            .returning(|_, _, _| Ok(empty_search_result()));
+        client
+            .expect_search_rejected_prs_by_author_global()
+            .returning(|_| Ok(0));
         client
     }
 
@@ -355,6 +483,35 @@ mod tests {
         assert!(
             matches!(result.err(), Some(TriageError::GitHub(_))),
             "should be GitHub error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_repeat_offender_applies_penalty() {
+        let mut app = MockGitHubApp::new();
+        app.expect_installation_client().returning(|_| {
+            let mut client = setup_successful_client();
+            client
+                .expect_search_rejected_prs_by_author()
+                .returning(|_, _, _| {
+                    Ok(RejectedPrSearchResult {
+                        total_count: 5,
+                        items: vec![],
+                    })
+                });
+            client
+                .expect_search_rejected_prs_by_author_global()
+                .returning(|_| Ok(25));
+            Ok(client)
+        });
+
+        let mistral = Arc::new(successful_mistral_response());
+        let service = TriageService::new(Arc::new(app), mistral);
+
+        let result = service.execute(sample_request()).await;
+        assert!(
+            result.is_ok(),
+            "execute should succeed with repeat offender"
         );
     }
 }
