@@ -12,6 +12,7 @@ pub enum MistralError {
     EmptyResponse,
 }
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait MistralPort: Send + Sync {
     async fn chat_completion(

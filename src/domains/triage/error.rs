@@ -4,4 +4,7 @@ use crate::ports::github::GitHubError;
 pub enum TriageError {
     #[error(transparent)]
     GitHub(#[from] GitHubError),
+
+    #[error("pull request has no commits")]
+    NoCommits,
 }
