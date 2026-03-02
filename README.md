@@ -1,4 +1,18 @@
-# Pratrol
+<p align="center">
+  <img src="https://raw.githubusercontent.com/stratorys/pratrol/main/landing/public/logo.png" alt="Pratrol Logo" width="140" />
+</p>
+
+<h1 align="center">Pratrol</h1>
+
+<p align="center">
+  Triage pull requests by risk, not by timestamp.
+  <br />
+  <a href="https://pratrol.com"><strong>Pratrol.com</strong></a>
+</p>
+
+## Demo Video
+
+[![Watch the Pratrol presentation](https://img.youtube.com/vi/oSew_USVRIc/maxresdefault.jpg)](https://www.youtube.com/watch?v=oSew_USVRIc)
 
 Open-source maintainers drown in pull requests they never asked for. Spam PRs, drive-by contributions from unknown accounts, and low-effort changes waste reviewer time and pollute commit history. The problem scales with popularity — the more visible a project, the more noise lands in the PR queue.
 
