@@ -81,7 +81,8 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
 
         let profile_score = self.scoring.compute_profile_score(&profile_signals);
 
-        let prompt = self.analysis.build_prompt(&diff, &commits);
+        let commit_messages: Vec<&str> = commits.iter().map(|ci| ci.message.as_str()).collect();
+        let prompt = self.analysis.build_prompt(&diff, &commit_messages);
 
         let (quality_score, summary, key_signal, recommendation, analysis_partial) =
             match self.mistral.chat_completion(&prompt).await {
@@ -138,23 +139,49 @@ impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
 
         let markdown = self.comment.render(&comment_payload);
 
+        let head_commit = commits.last().ok_or(TriageError::NoCommits)?;
+
         client
-            .post_review(owner, repo, pr_number, &markdown)
+            .post_review(owner, repo, pr_number, &head_commit.sha, &markdown)
             .await?;
 
-        if let Err(error) = client
-            .add_labels(owner, repo, pr_number, vec![
-                combined_tier.label().to_owned(),
-            ])
+        let label_name = combined_tier.label().to_owned();
+        let label_color = combined_tier.label_color().to_owned();
+        let label_description = combined_tier.label_description().to_owned();
+
+        match client
+            .ensure_label(
+                owner,
+                repo,
+                label_name.clone(),
+                label_color,
+                label_description,
+            )
             .await
         {
-            warn!(
-                message = "Failed to add label to PR.",
-                triage_id = %triage_id,
-                pr_number,
-                label = combined_tier.label(),
-                %error,
-            );
+            Ok(()) => {
+                if let Err(error) = client
+                    .add_labels(owner, repo, pr_number, vec![label_name])
+                    .await
+                {
+                    warn!(
+                        message = "Failed to add label to PR.",
+                        triage_id = %triage_id,
+                        pr_number,
+                        label = combined_tier.label(),
+                        %error,
+                    );
+                }
+            }
+            Err(error) => {
+                warn!(
+                    message = "Failed to ensure label exists.",
+                    triage_id = %triage_id,
+                    pr_number,
+                    label = combined_tier.label(),
+                    %error,
+                );
+            }
         }
 
         info!(
@@ -183,140 +210,15 @@ fn fallback_analysis() -> (Score, String, String, String, bool) {
 mod tests {
     use std::sync::Arc;
 
-    use async_trait::async_trait;
-
     use super::*;
     use crate::domains::triage::entity::TriageId;
     use crate::ports::github::{
-        GitHubApp,
-        GitHubClient,
-        GitHubError,
+        CommitInfo,
+        MockGitHubApp,
+        MockGitHubClient,
         UserInfo,
     };
-    use crate::ports::mistral::{
-        MistralError,
-        MistralPort,
-    };
-
-    struct MockGitHubApp {
-        should_fail: bool,
-    }
-
-    struct MockGitHubClient;
-
-    #[async_trait]
-    impl GitHubApp for MockGitHubApp {
-        type Client = MockGitHubClient;
-
-        async fn installation_client(
-            &self,
-            _installation_id: u64,
-        ) -> Result<MockGitHubClient, GitHubError> {
-            if self.should_fail {
-                return Err(GitHubError::UnexpectedStatus);
-            }
-            Ok(MockGitHubClient)
-        }
-    }
-
-    #[async_trait]
-    impl GitHubClient for MockGitHubClient {
-        async fn fetch_user(
-            &self,
-            _login: &str,
-        ) -> Result<UserInfo, GitHubError> {
-            Ok(UserInfo {
-                account_age_days: 365,
-                public_repos: 10,
-                followers: 5,
-            })
-        }
-
-        async fn fetch_events_count(
-            &self,
-            _login: &str,
-        ) -> Result<u32, GitHubError> {
-            Ok(50)
-        }
-
-        async fn fetch_orgs_count(
-            &self,
-            _login: &str,
-        ) -> Result<u32, GitHubError> {
-            Ok(2)
-        }
-
-        async fn fetch_merged_prs(
-            &self,
-            _login: &str,
-            _owner: &str,
-            _repo: &str,
-        ) -> Result<u32, GitHubError> {
-            Ok(3)
-        }
-
-        async fn fetch_merged_prs_global(
-            &self,
-            _login: &str,
-        ) -> Result<u32, GitHubError> {
-            Ok(15)
-        }
-
-        async fn fetch_diff(
-            &self,
-            _owner: &str,
-            _repo: &str,
-            _pr_number: u64,
-        ) -> Result<String, GitHubError> {
-            Ok("diff content".to_owned())
-        }
-
-        async fn fetch_commits(
-            &self,
-            _owner: &str,
-            _repo: &str,
-            _pr_number: u64,
-        ) -> Result<Vec<String>, GitHubError> {
-            Ok(vec!["Initial commit".to_owned()])
-        }
-
-        async fn post_review(
-            &self,
-            _owner: &str,
-            _repo: &str,
-            _pr_number: u64,
-            _body: &str,
-        ) -> Result<(), GitHubError> {
-            Ok(())
-        }
-
-        async fn add_labels(
-            &self,
-            _owner: &str,
-            _repo: &str,
-            _pr_number: u64,
-            _labels: Vec<String>,
-        ) -> Result<(), GitHubError> {
-            Ok(())
-        }
-    }
-
-    struct MockMistral {
-        should_fail: bool,
-    }
-
-    #[async_trait]
-    impl MistralPort for MockMistral {
-        async fn chat_completion(
-            &self,
-            _prompt: &str,
-        ) -> Result<String, MistralError> {
-            if self.should_fail {
-                return Err(MistralError::EmptyResponse);
-            }
-            Ok(r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "A good PR.", "key_signal": "Clean code.", "recommendation": "Approve."}"#.to_owned())
-        }
-    }
+    use crate::ports::mistral::MockMistralPort;
 
     fn sample_request() -> TriageRequest {
         TriageRequest {
@@ -329,14 +231,59 @@ mod tests {
         }
     }
 
+    fn setup_successful_client() -> MockGitHubClient {
+        let mut client = MockGitHubClient::new();
+        client.expect_fetch_user().returning(|_| {
+            Ok(UserInfo {
+                account_age_days: 365,
+                public_repos: 10,
+                followers: 5,
+            })
+        });
+        client.expect_fetch_events_count().returning(|_| Ok(50));
+        client.expect_fetch_orgs_count().returning(|_| Ok(2));
+        client.expect_fetch_merged_prs().returning(|_, _, _| Ok(3));
+        client
+            .expect_fetch_merged_prs_global()
+            .returning(|_| Ok(15));
+        client
+            .expect_fetch_diff()
+            .returning(|_, _, _| Ok("diff content".to_owned()));
+        client.expect_fetch_commits().returning(|_, _, _| {
+            Ok(vec![CommitInfo {
+                sha: "abc123".to_owned(),
+                message: "Initial commit".to_owned(),
+            }])
+        });
+        client
+            .expect_post_review()
+            .returning(|_, _, _, _, _| Ok(()));
+        client
+            .expect_ensure_label()
+            .returning(|_, _, _, _, _| Ok(()));
+        client.expect_add_labels().returning(|_, _, _, _| Ok(()));
+        client
+    }
+
+    fn setup_successful_app() -> MockGitHubApp {
+        let mut app = MockGitHubApp::new();
+        app.expect_installation_client()
+            .returning(|_| Ok(setup_successful_client()));
+        app
+    }
+
+    fn successful_mistral_response() -> MockMistralPort {
+        let mut mistral = MockMistralPort::new();
+        mistral.expect_chat_completion().returning(|_| {
+            Ok(r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "A good PR.", "key_signal": "Clean code.", "recommendation": "Approve."}"#.to_owned())
+        });
+        mistral
+    }
+
     #[tokio::test]
     async fn test_execute_success() {
-        let github = Arc::new(MockGitHubApp {
-            should_fail: false,
-        });
-        let mistral = Arc::new(MockMistral {
-            should_fail: false,
-        });
+        let github = Arc::new(setup_successful_app());
+        let mistral = Arc::new(successful_mistral_response());
         let service = TriageService::new(github, mistral);
 
         let result = service.execute(sample_request()).await;
@@ -345,13 +292,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_mistral_failure_uses_fallback() {
-        let github = Arc::new(MockGitHubApp {
-            should_fail: false,
-        });
-        let mistral = Arc::new(MockMistral {
-            should_fail: true,
-        });
-        let service = TriageService::new(github, mistral);
+        let github = Arc::new(setup_successful_app());
+        let mut mistral = MockMistralPort::new();
+        mistral
+            .expect_chat_completion()
+            .returning(|_| Err(crate::ports::mistral::MistralError::EmptyResponse));
+        let service = TriageService::new(github, Arc::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(
@@ -362,13 +308,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_github_failure_propagates() {
-        let github = Arc::new(MockGitHubApp {
-            should_fail: true,
+        let mut app = MockGitHubApp::new();
+        app.expect_installation_client().returning(|_| {
+            let jwt_error =
+                jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken);
+            Err(crate::ports::github::GitHubError::Jwt(jwt_error))
         });
-        let mistral = Arc::new(MockMistral {
-            should_fail: false,
-        });
-        let service = TriageService::new(github, mistral);
+        let mistral = Arc::new(successful_mistral_response());
+        let service = TriageService::new(Arc::new(app), mistral);
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_err(), "execute should fail when GitHub fails");

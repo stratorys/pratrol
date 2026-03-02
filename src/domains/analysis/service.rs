@@ -16,7 +16,7 @@ impl AnalysisService {
     pub fn build_prompt(
         &self,
         diff: &str,
-        commits: &[String],
+        commits: &[&str],
     ) -> String {
         let mut commits_text = String::with_capacity(commits.len() * 80);
         for (index, message) in commits.iter().enumerate() {
@@ -99,7 +99,7 @@ mod tests {
     fn test_build_prompt_contains_diff_and_commits() {
         let service = AnalysisService::new();
         let diff = "diff --git a/file.rs";
-        let commits = vec!["Initial commit".to_owned(), "Fix bug".to_owned()];
+        let commits = vec!["Initial commit", "Fix bug"];
         let prompt = service.build_prompt(diff, &commits);
         assert!(
             prompt.contains("diff --git a/file.rs"),

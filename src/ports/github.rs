@@ -7,12 +7,6 @@ pub enum GitHubError {
 
     #[error(transparent)]
     Jwt(#[from] jsonwebtoken::errors::Error),
-
-    #[error(transparent)]
-    TimeParse(#[from] chrono::ParseError),
-
-    #[error("unexpected response status")]
-    UnexpectedStatus,
 }
 
 pub struct UserInfo {
@@ -21,6 +15,12 @@ pub struct UserInfo {
     pub followers: u32,
 }
 
+pub struct CommitInfo {
+    pub sha: String,
+    pub message: String,
+}
+
+#[cfg_attr(test, mockall::automock(type Client = MockGitHubClient;))]
 #[async_trait]
 pub trait GitHubApp: Send + Sync {
     type Client: GitHubClient;
@@ -31,6 +31,7 @@ pub trait GitHubApp: Send + Sync {
     ) -> Result<Self::Client, GitHubError>;
 }
 
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait GitHubClient: Send + Sync {
     async fn fetch_user(
@@ -72,13 +73,14 @@ pub trait GitHubClient: Send + Sync {
         owner: &str,
         repo: &str,
         pr_number: u64,
-    ) -> Result<Vec<String>, GitHubError>;
+    ) -> Result<Vec<CommitInfo>, GitHubError>;
 
     async fn post_review(
         &self,
         owner: &str,
         repo: &str,
         pr_number: u64,
+        commit_sha: &str,
         body: &str,
     ) -> Result<(), GitHubError>;
 
@@ -88,5 +90,14 @@ pub trait GitHubClient: Send + Sync {
         repo: &str,
         pr_number: u64,
         labels: Vec<String>,
+    ) -> Result<(), GitHubError>;
+
+    async fn ensure_label(
+        &self,
+        owner: &str,
+        repo: &str,
+        name: String,
+        color: String,
+        description: String,
     ) -> Result<(), GitHubError>;
 }

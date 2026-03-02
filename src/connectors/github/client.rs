@@ -1,69 +1,17 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use http::header::{
-    ACCEPT,
-    HeaderMap,
-    HeaderValue,
-};
-use http_body_util::BodyExt;
-use percent_encoding::{
-    AsciiSet,
-    CONTROLS,
-    utf8_percent_encode,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use tracing::warn;
+use octocrab::models::pulls::ReviewAction;
 
 use super::InstalledClient;
 use crate::ports::github::{
+    CommitInfo,
     GitHubClient,
     GitHubError,
     UserInfo,
 };
 
-const QUERY_ENCODE_SET: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'#').add(b'<').add(b'>');
-
 const DIFF_MAX_CHARS: usize = 30_000;
 const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
-
-#[derive(Deserialize)]
-struct GitHubUser {
-    public_repos: u32,
-    followers: u32,
-    created_at: String,
-}
-
-#[derive(Deserialize)]
-struct SearchResult {
-    total_count: u32,
-}
-
-#[derive(Deserialize)]
-struct CommitItem {
-    commit: CommitDetail,
-}
-
-#[derive(Deserialize)]
-struct CommitDetail {
-    message: String,
-}
-
-#[derive(Serialize)]
-struct CreateReviewRequest {
-    body: String,
-    event: String,
-}
-
-#[derive(Deserialize)]
-struct CreateReviewResponse {}
-
-#[derive(Serialize)]
-struct AddLabelsRequest {
-    labels: Vec<String>,
-}
 
 #[async_trait]
 impl GitHubClient for InstalledClient {
@@ -71,19 +19,17 @@ impl GitHubClient for InstalledClient {
         &self,
         login: &str,
     ) -> Result<UserInfo, GitHubError> {
-        let route = format!("/users/{login}");
-        let user: GitHubUser = self.octocrab.get(route, None::<&()>).await?;
+        let profile = self.octocrab.users(login).profile().await?;
 
-        let created_at = chrono::DateTime::parse_from_rfc3339(&user.created_at)?;
+        let age_days = (Utc::now() - profile.created_at).num_days().max(0) as u32;
 
-        let age_days = (Utc::now() - created_at.with_timezone(&Utc))
-            .num_days()
-            .max(0) as u32;
+        let public_repos = u32::try_from(profile.public_repos).unwrap_or(u32::MAX);
+        let followers = u32::try_from(profile.followers).unwrap_or(u32::MAX);
 
         Ok(UserInfo {
             account_age_days: age_days,
-            public_repos: user.public_repos,
-            followers: user.followers,
+            public_repos,
+            followers,
         })
     }
 
@@ -129,40 +75,7 @@ impl GitHubClient for InstalledClient {
         repo: &str,
         pr_number: u64,
     ) -> Result<String, GitHubError> {
-        let uri = format!("/repos/{owner}/{repo}/pulls/{pr_number}");
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            ACCEPT,
-            HeaderValue::from_static("application/vnd.github.v3.diff"),
-        );
-
-        let response = self.octocrab._get_with_headers(uri, Some(headers)).await?;
-
-        if !response.status().is_success() {
-            warn!(
-                message = "GitHub API returned error status for diff.",
-                status = %response.status(),
-            );
-            return Err(GitHubError::UnexpectedStatus);
-        }
-
-        let body_bytes = response
-            .into_body()
-            .collect()
-            .await
-            .map_err(|error| {
-                warn!(message = "Failed to read diff response body.", %error);
-                GitHubError::UnexpectedStatus
-            })?
-            .to_bytes();
-
-        let mut diff = String::from_utf8(body_bytes.to_vec()).map_err(|error| {
-            warn!(
-                message = "Diff response contained invalid UTF-8.",
-                byte_count = error.as_bytes().len(),
-            );
-            GitHubError::UnexpectedStatus
-        })?;
+        let mut diff = self.octocrab.pulls(owner, repo).get_diff(pr_number).await?;
 
         if diff.len() > DIFF_MAX_CHARS {
             diff.truncate(DIFF_MAX_CHARS);
@@ -176,36 +89,51 @@ impl GitHubClient for InstalledClient {
         owner: &str,
         repo: &str,
         pr_number: u64,
-    ) -> Result<Vec<String>, GitHubError> {
-        let route = format!("/repos/{owner}/{repo}/pulls/{pr_number}/commits?per_page=100");
-        let items: Vec<CommitItem> = self.octocrab.get(route, None::<&()>).await?;
-        let messages: Vec<String> = items
+    ) -> Result<Vec<CommitInfo>, GitHubError> {
+        let page = self
+            .octocrab
+            .pulls(owner, repo)
+            .pr_commits(pr_number)
+            .per_page(100)
+            .send()
+            .await?;
+
+        let commits: Vec<CommitInfo> = page
+            .items
             .into_iter()
-            .map(|item| {
-                let mut message = item.commit.message;
+            .map(|repo_commit| {
+                let mut message = repo_commit.commit.message;
                 if message.len() > COMMIT_MESSAGE_MAX_CHARS {
                     message.truncate(COMMIT_MESSAGE_MAX_CHARS);
                 }
-                message
+                CommitInfo {
+                    sha: repo_commit.sha,
+                    message,
+                }
             })
             .collect();
-        Ok(messages)
+
+        Ok(commits)
     }
 
+    #[allow(
+        deprecated,
+        reason = "octocrab has no non-deprecated path to create_review"
+    )]
     async fn post_review(
         &self,
         owner: &str,
         repo: &str,
         pr_number: u64,
+        commit_sha: &str,
         body: &str,
     ) -> Result<(), GitHubError> {
-        let route = format!("/repos/{owner}/{repo}/pulls/{pr_number}/reviews");
-        let payload = CreateReviewRequest {
-            body: body.to_owned(),
-            event: "COMMENT".to_owned(),
-        };
-
-        let _: CreateReviewResponse = self.octocrab.post(route, Some(&payload)).await?;
+        self.octocrab
+            .pulls(owner, repo)
+            .pull_number(pr_number)
+            .reviews()
+            .create_review(commit_sha, body, ReviewAction::Comment, vec![])
+            .await?;
 
         Ok(())
     }
@@ -217,14 +145,37 @@ impl GitHubClient for InstalledClient {
         pr_number: u64,
         labels: Vec<String>,
     ) -> Result<(), GitHubError> {
-        let route = format!("/repos/{owner}/{repo}/issues/{pr_number}/labels");
-        let payload = AddLabelsRequest {
-            labels,
-        };
-
-        let _: Vec<serde_json::Value> = self.octocrab.post(route, Some(&payload)).await?;
+        self.octocrab
+            .issues(owner, repo)
+            .add_labels(pr_number, &labels)
+            .await?;
 
         Ok(())
+    }
+
+    async fn ensure_label(
+        &self,
+        owner: &str,
+        repo: &str,
+        name: String,
+        color: String,
+        description: String,
+    ) -> Result<(), GitHubError> {
+        let result = self.octocrab.issues(owner, repo).get_label(&name).await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(octocrab::Error::GitHub {
+                ref source, ..
+            }) if source.status_code == http::StatusCode::NOT_FOUND => {
+                self.octocrab
+                    .issues(owner, repo)
+                    .create_label(&name, &color, &description)
+                    .await?;
+                Ok(())
+            }
+            Err(error) => Err(GitHubError::Api(error)),
+        }
     }
 }
 
@@ -233,9 +184,17 @@ impl InstalledClient {
         &self,
         query: &str,
     ) -> Result<u32, GitHubError> {
-        let encoded = utf8_percent_encode(query, QUERY_ENCODE_SET).to_string();
-        let route = format!("/search/issues?q={encoded}&per_page=1");
-        let result: SearchResult = self.octocrab.get(route, None::<&()>).await?;
-        Ok(result.total_count)
+        let page = self
+            .octocrab
+            .search()
+            .issues_and_pull_requests(query)
+            .per_page(1)
+            .send()
+            .await?;
+
+        let count = page.total_count.unwrap_or(0);
+        let count_u32 = u32::try_from(count).unwrap_or(u32::MAX);
+
+        Ok(count_u32)
     }
 }

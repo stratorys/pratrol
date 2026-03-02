@@ -35,9 +35,25 @@ impl Tier {
 
     pub fn label(&self) -> &'static str {
         match self {
-            Tier::High => "needs-review",
-            Tier::Medium => "suspicious",
-            Tier::Low => "spam",
+            Tier::High => "patrol:trusted",
+            Tier::Medium => "patrol:suspicious",
+            Tier::Low => "patrol:spam",
+        }
+    }
+
+    pub fn label_color(&self) -> &'static str {
+        match self {
+            Tier::High => "0e8a16",
+            Tier::Medium => "e4a012",
+            Tier::Low => "d93f0b",
+        }
+    }
+
+    pub fn label_description(&self) -> &'static str {
+        match self {
+            Tier::High => "PR author and content look trustworthy",
+            Tier::Medium => "PR has some suspicious signals and needs careful review",
+            Tier::Low => "PR is likely spam and should be closed",
         }
     }
 }
