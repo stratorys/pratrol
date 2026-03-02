@@ -1,4 +1,5 @@
 use super::entity::CommentPayload;
+use crate::sanitize::sanitize_plain_text;
 
 const TRIAGE_TEMPLATE: &str = include_str!("templates/triage.md");
 const PARTIAL_NOTE: &str = include_str!("templates/partial_note.md");
@@ -35,9 +36,12 @@ impl CommentService {
             )
             .replace("{{combined_badge}}", combined_badge)
             .replace("{{combined_tier}}", &payload.combined_tier_label)
-            .replace("{{summary}}", &payload.summary)
-            .replace("{{key_signal}}", &payload.key_signal)
-            .replace("{{recommendation}}", &payload.recommendation);
+            .replace("{{summary}}", &sanitize_plain_text(&payload.summary))
+            .replace("{{key_signal}}", &sanitize_plain_text(&payload.key_signal))
+            .replace(
+                "{{recommendation}}",
+                &sanitize_plain_text(&payload.recommendation),
+            );
 
         if !payload.history_section.is_empty() {
             output.push_str(&payload.history_section);
@@ -136,6 +140,41 @@ mod tests {
         assert!(
             output.contains("AI analysis was unavailable"),
             "should contain partial note"
+        );
+    }
+
+    #[test]
+    fn test_render_sanitizes_ai_text_fields() {
+        let service = CommentService::new();
+        let mut payload = sample_payload(false);
+        payload.summary = "Ping @security-team <script>alert(1)</script>".to_owned();
+
+        let output = service.render(&payload);
+        assert!(
+            output.contains("@\u{200B}security-team"),
+            "should neutralize mentions"
+        );
+        assert!(
+            !output.contains("<script>"),
+            "should escape angle brackets: {output}"
+        );
+        assert!(
+            output.contains("alert(1)"),
+            "text content should remain: {output}"
+        );
+    }
+
+    #[test]
+    fn test_render_handles_unicode_without_panicking() {
+        let service = CommentService::new();
+        let mut payload = sample_payload(false);
+        payload.summary = "é".repeat(301);
+
+        let output = service.render(&payload);
+
+        assert!(
+            output.contains("…"),
+            "long unicode summary should be truncated with ellipsis"
         );
     }
 }

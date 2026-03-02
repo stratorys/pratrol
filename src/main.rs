@@ -4,6 +4,7 @@ mod connectors;
 mod domains;
 mod error;
 mod ports;
+mod sanitize;
 
 use std::process::ExitCode;
 use std::sync::Arc;
