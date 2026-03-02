@@ -21,6 +21,7 @@ pub struct Repository {
 #[derive(Debug, Deserialize)]
 pub struct PullRequestPayload {
     pub number: u64,
+    pub title: String,
     pub user: PullRequestUser,
     #[serde(default)]
     pub draft: bool,

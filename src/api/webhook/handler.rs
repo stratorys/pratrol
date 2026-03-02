@@ -93,6 +93,7 @@ fn try_into_triage_request(event: &WebhookEvent) -> Option<TriageRequest> {
         repo,
         pr_number: event.pull_request.number,
         author_login: event.pull_request.user.login.clone(),
+        title: event.pull_request.title.clone(),
     })
 }
 

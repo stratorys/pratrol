@@ -9,6 +9,8 @@ use crate::ports::github::{
     CommitInfo,
     GitHubClient,
     GitHubError,
+    RejectedPrInfo,
+    RejectedPrSearchResult,
     UserInfo,
 };
 
@@ -237,6 +239,34 @@ impl GitHubClient for InstalledClient {
             Err(error) => Err(GitHubError::Api(error)),
         }
     }
+
+    async fn search_rejected_prs_by_author(
+        &self,
+        login: &str,
+        owner: &str,
+        repo: &str,
+    ) -> Result<RejectedPrSearchResult, GitHubError> {
+        let query = format!("is:pr is:closed is:unmerged author:{login} repo:{owner}/{repo}");
+        self.search_rejected_prs(&query).await
+    }
+
+    async fn search_rejected_prs_by_title(
+        &self,
+        keywords: &str,
+        owner: &str,
+        repo: &str,
+    ) -> Result<RejectedPrSearchResult, GitHubError> {
+        let query = format!("is:pr is:closed is:unmerged repo:{owner}/{repo} \"{keywords}\"");
+        self.search_rejected_prs(&query).await
+    }
+
+    async fn search_rejected_prs_by_author_global(
+        &self,
+        login: &str,
+    ) -> Result<u32, GitHubError> {
+        let query = format!("is:pr is:closed is:unmerged author:{login}");
+        self.search_issues_count(&query).await
+    }
 }
 
 impl InstalledClient {
@@ -261,6 +291,39 @@ impl InstalledClient {
         self.octocrab
             .get(format!("/users/{login}/orgs"), Some(&[("per_page", "100")]))
             .await
+    }
+
+    async fn search_rejected_prs(
+        &self,
+        query: &str,
+    ) -> Result<RejectedPrSearchResult, GitHubError> {
+        const MAX_RESULTS: usize = 5;
+
+        let page = self
+            .octocrab
+            .search()
+            .issues_and_pull_requests(query)
+            .per_page(u8::try_from(MAX_RESULTS).unwrap_or(u8::MAX))
+            .send()
+            .await?;
+
+        let total_count = u32::try_from(page.total_count.unwrap_or(0)).unwrap_or(u32::MAX);
+
+        let items: Vec<RejectedPrInfo> = page
+            .items
+            .into_iter()
+            .take(MAX_RESULTS)
+            .map(|issue| RejectedPrInfo {
+                number: issue.number,
+                title: issue.title,
+                html_url: issue.html_url.to_string(),
+            })
+            .collect();
+
+        Ok(RejectedPrSearchResult {
+            total_count,
+            items,
+        })
     }
 
     async fn search_issues_count(
