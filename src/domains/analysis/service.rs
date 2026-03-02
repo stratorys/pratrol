@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use rand::RngExt;
 use serde::Deserialize;
 use tracing::warn;
 
@@ -23,7 +24,12 @@ impl AnalysisService {
             let _ = writeln!(commits_text, "{}. {}", index + 1, message);
         }
 
+        let sentinel_diff = random_sentinel();
+        let sentinel_commits = random_sentinel();
+
         REVIEW_PROMPT_TEMPLATE
+            .replace("{{sentinel_diff}}", &sentinel_diff)
+            .replace("{{sentinel_commits}}", &sentinel_commits)
             .replace("{{diff}}", diff)
             .replace("{{commits}}", &commits_text)
     }
@@ -81,6 +87,12 @@ fn validate_range(
     Ok(())
 }
 
+/// Generate a random boundary token that an attacker cannot predict.
+fn random_sentinel() -> String {
+    let token: u64 = rand::rng().random();
+    format!("BOUNDARY_{token:016X}")
+}
+
 fn extract_json(raw: &str) -> &str {
     let trimmed = raw.trim();
     if let Some(start) = trimmed.find('{')
@@ -112,6 +124,45 @@ mod tests {
         assert!(
             prompt.contains("Fix bug"),
             "prompt should contain second commit"
+        );
+    }
+
+    #[test]
+    fn test_build_prompt_uses_random_sentinels() {
+        let service = AnalysisService::new();
+        let prompt = service.build_prompt("diff content", &["commit"]);
+        assert!(
+            prompt.contains("BOUNDARY_"),
+            "prompt should contain random sentinel markers"
+        );
+        assert!(
+            !prompt.contains("{{sentinel_diff}}"),
+            "sentinel placeholders should be replaced"
+        );
+        assert!(
+            !prompt.contains("{{sentinel_commits}}"),
+            "sentinel placeholders should be replaced"
+        );
+    }
+
+    #[test]
+    fn test_build_prompt_sentinels_are_unique() {
+        let service = AnalysisService::new();
+        let prompt1 = service.build_prompt("diff", &["commit"]);
+        let prompt2 = service.build_prompt("diff", &["commit"]);
+
+        let extract_sentinel = |prompt: &str| -> String {
+            prompt
+                .lines()
+                .find(|line| line.contains("BOUNDARY_") && line.contains("BEGIN UNTRUSTED DIFF"))
+                .map(|line| line.to_owned())
+                .unwrap_or_default()
+        };
+
+        assert_ne!(
+            extract_sentinel(&prompt1),
+            extract_sentinel(&prompt2),
+            "consecutive prompts should have different sentinels"
         );
     }
 

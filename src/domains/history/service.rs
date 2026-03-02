@@ -1,8 +1,14 @@
+use tracing::warn;
+
 use super::entity::{
     HistoryResult,
     HistorySignals,
 };
 use crate::ports::github::RejectedPrInfo;
+use crate::sanitize::{
+    sanitize_markdown_text,
+    sanitize_url,
+};
 
 const AUTHOR_REPO_PENALTY_MAX: f64 = 10.0;
 const AUTHOR_REPO_DIVISOR: f64 = 5.0;
@@ -139,10 +145,22 @@ fn append_pr_list(
         if item.number == current_pr_number {
             continue;
         }
-        output.push_str(&format!(
-            "- [#{}]({}) — {}\n",
-            item.number, item.html_url, item.title
-        ));
+        let safe_title = sanitize_markdown_text(&item.title);
+        match sanitize_url(&item.html_url) {
+            Some(safe_url) => {
+                output.push_str(&format!(
+                    "- [#{}]({safe_url}) — {safe_title}\n",
+                    item.number,
+                ));
+            }
+            None => {
+                warn!(
+                    message = "Dropped non-HTTPS URL from history section.",
+                    pr_number = item.number,
+                );
+                output.push_str(&format!("- #{} — {safe_title}\n", item.number));
+            }
+        }
     }
     output.push('\n');
 }
@@ -303,6 +321,65 @@ mod tests {
         assert!(
             !result.history_section.contains("[#42]"),
             "current PR should be excluded from the list"
+        );
+    }
+
+    #[test]
+    fn test_history_section_sanitizes_title_and_mentions() {
+        let service = HistoryService::new();
+        let signals = HistorySignals {
+            rejected_by_author_in_repo: 1,
+            rejected_by_author_in_repo_items: vec![RejectedPrInfo {
+                number: 41,
+                title: "Ping @security-team [x](y) <script>alert(1)</script>".to_owned(),
+                html_url: "https://github.com/o/r/pull/41".to_owned(),
+            }],
+            rejected_by_title_in_repo: 0,
+            rejected_by_title_in_repo_items: vec![],
+            rejected_by_author_global: 0,
+        };
+        let result = service.evaluate(&signals, 42);
+        assert!(
+            result.history_section.contains("@\u{200B}security-team"),
+            "mentions in history titles should be neutralized: {}",
+            result.history_section,
+        );
+        assert!(
+            !result.history_section.contains("<script>"),
+            "script tags should be stripped by ammonia: {}",
+            result.history_section,
+        );
+        assert!(
+            !result.history_section.contains("javascript:"),
+            "javascript URIs should not survive ammonia: {}",
+            result.history_section,
+        );
+    }
+
+    #[test]
+    fn test_history_section_rejects_non_https_url() {
+        let service = HistoryService::new();
+        let signals = HistorySignals {
+            rejected_by_author_in_repo: 1,
+            rejected_by_author_in_repo_items: vec![RejectedPrInfo {
+                number: 41,
+                title: "Some PR".to_owned(),
+                html_url: "javascript:alert(1)".to_owned(),
+            }],
+            rejected_by_title_in_repo: 0,
+            rejected_by_title_in_repo_items: vec![],
+            rejected_by_author_global: 0,
+        };
+        let result = service.evaluate(&signals, 42);
+        assert!(
+            !result.history_section.contains("javascript:"),
+            "non-https URL should be dropped: {}",
+            result.history_section,
+        );
+        assert!(
+            result.history_section.contains("#41"),
+            "PR number should still appear without link: {}",
+            result.history_section,
         );
     }
 }
