@@ -8,7 +8,7 @@ license = "MPL-2.0"
 
 [dependencies]
 ammonia = "4.1.2"
-askama_escape = "0.15.4"
+askama_escape = "0.16.0"
 async-trait = "0.1.89"
 axum = "0.8.8"
 chrono = "0.4.44"

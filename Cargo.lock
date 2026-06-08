@@ -56,9 +56,9 @@ dependencies = [
 
 [[package]]
 name = "askama_escape"
-version = "0.15.4"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7416d225cbbaf6dbd8c983d3544adfa5688e2184bf404c6d8d0d9b53c59a9a0a"
+checksum = "2e86a22a67898006b0dadb4af8336c996d1ceaea72da6cfafd61443115ee1d94"
 
 [[package]]
 name = "async-trait"
