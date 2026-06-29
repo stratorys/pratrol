@@ -17,7 +17,7 @@
     "better-sqlite3": "^12.6.2",
     "debug": "^4.4.3",
     "nuxt": "^4.3.1",
-    "parse5": "^8.0.0",
+    "parse5": "^8.0.1",
     "rehype-raw": "^7.0.0",
     "remark-emoji": "^5.0.2",
     "remark-gfm": "^4.0.1",
