@@ -5,6 +5,7 @@ use axum::http::{
     StatusCode,
 };
 use axum::response::IntoResponse;
+use hmac::digest::KeyInit;
 use hmac::{
     Hmac,
     Mac,
@@ -134,6 +135,7 @@ fn split_full_name(full_name: &str) -> Option<(String, String)> {
 
 #[cfg(test)]
 mod tests {
+    use hmac::digest::KeyInit;
     use hmac::{
         Hmac,
         Mac,
