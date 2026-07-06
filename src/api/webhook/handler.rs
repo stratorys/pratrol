@@ -8,6 +8,7 @@ use axum::response::IntoResponse;
 use hmac::{
     Hmac,
     Mac,
+    digest::KeyInit,
 };
 use sha2::Sha256;
 use tracing::{
@@ -137,6 +138,7 @@ mod tests {
     use hmac::{
         Hmac,
         Mac,
+        digest::KeyInit,
     };
     use sha2::Sha256;
 
