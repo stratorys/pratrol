@@ -32,19 +32,19 @@ const REPEAT_OFFENDER_COLOR: &str = "e4a012";
 const REPEAT_OFFENDER_DESCRIPTION: &str = "Author has multiple closed-without-merge PRs";
 const PARTIAL_ANALYSIS_SCORE_CAP: f64 = 39.0;
 
-pub struct TriageService<G, M> {
-    github: Arc<G>,
-    mistral: Arc<M>,
+pub struct TriageService {
+    github: Arc<dyn GitHubApp>,
+    mistral: Arc<dyn Llm>,
     scoring: ScoringService,
     analysis: AnalysisService,
     comment: CommentService,
     history: HistoryService,
 }
 
-impl<G: GitHubApp, M: Llm> TriageService<G, M> {
+impl TriageService {
     pub fn new(
-        github: Arc<G>,
-        mistral: Arc<M>,
+        github: Arc<dyn GitHubApp>,
+        mistral: Arc<dyn Llm>,
     ) -> Self {
         Self {
             github,
@@ -91,7 +91,7 @@ impl<G: GitHubApp, M: Llm> TriageService<G, M> {
         )?;
 
         let history_signals = self
-            .fetch_history_signals(&client, login, owner, repo, &request.title)
+            .fetch_history_signals(client.as_ref(), login, owner, repo, &request.title)
             .await;
 
         let profile_signals = ProfileSignals {
@@ -254,7 +254,7 @@ impl<G: GitHubApp, M: Llm> TriageService<G, M> {
 
     async fn fetch_history_signals(
         &self,
-        client: &G::Client,
+        client: &dyn GitHubClient,
         login: &str,
         owner: &str,
         repo: &str,
@@ -420,7 +420,7 @@ mod tests {
     fn setup_successful_app() -> MockGitHubApp {
         let mut app = MockGitHubApp::new();
         app.expect_installation_client()
-            .returning(|_| Ok(setup_successful_client()));
+            .returning(|_| Ok(Box::new(setup_successful_client())));
         app
     }
 
@@ -485,7 +485,7 @@ mod tests {
             client
                 .expect_search_rejected_prs_by_author_global()
                 .returning(|_| Ok(0));
-            Ok(client)
+            Ok(Box::new(client))
         });
         app
     }
@@ -525,7 +525,7 @@ mod tests {
             client
                 .expect_has_pratrol_review()
                 .returning(|_, _, _| Ok(true));
-            Ok(client)
+            Ok(Box::new(client))
         });
 
         let mistral = Arc::new(successful_mistral_response());
@@ -614,7 +614,7 @@ mod tests {
             client
                 .expect_search_rejected_prs_by_author_global()
                 .returning(|_| Ok(25));
-            Ok(client)
+            Ok(Box::new(client))
         });
 
         let mistral = Arc::new(successful_mistral_response());

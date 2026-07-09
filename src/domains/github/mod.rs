@@ -10,15 +10,13 @@ pub use entity::{
 };
 pub use error::GitHubError;
 
-#[cfg_attr(test, mockall::automock(type Client = MockGitHubClient;))]
+#[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait GitHubApp: Send + Sync {
-    type Client: GitHubClient;
-
     async fn installation_client(
         &self,
         installation_id: u64,
-    ) -> Result<Self::Client, GitHubError>;
+    ) -> Result<Box<dyn GitHubClient>, GitHubError>;
 }
 
 #[cfg_attr(test, mockall::automock)]

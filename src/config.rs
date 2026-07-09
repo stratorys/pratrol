@@ -26,9 +26,6 @@ pub enum ConfigError {
         value: String,
         source: std::num::ParseIntError,
     },
-
-    #[error("invalid model name: {value}")]
-    InvalidModelName { value: String },
 }
 
 #[derive(Clone)]

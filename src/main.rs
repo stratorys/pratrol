@@ -24,7 +24,7 @@ use crate::error::AppError;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub triage_service: Arc<TriageService<GitHubConnector, MistralConnector>>,
+    pub triage_service: Arc<TriageService>,
     pub webhook_secret: Arc<str>,
 }
 

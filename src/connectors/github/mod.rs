@@ -6,6 +6,7 @@ use octocrab::Octocrab;
 
 use crate::domains::github::{
     GitHubApp,
+    GitHubClient,
     GitHubError,
 };
 
@@ -44,20 +45,18 @@ pub struct InstalledClient {
 
 #[async_trait]
 impl GitHubApp for GitHubConnector {
-    type Client = InstalledClient;
-
     async fn installation_client(
         &self,
         installation_id: u64,
-    ) -> Result<InstalledClient, GitHubError> {
+    ) -> Result<Box<dyn GitHubClient>, GitHubError> {
         let (octocrab, _token) = self
             .app
             .installation_and_token(installation_id.into())
             .await?;
 
-        Ok(InstalledClient {
+        Ok(Box::new(InstalledClient {
             octocrab,
             bot_login: self.bot_login.clone(),
-        })
+        }))
     }
 }
