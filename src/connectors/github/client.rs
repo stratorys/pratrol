@@ -5,7 +5,7 @@ use octocrab::models::pulls::ReviewAction;
 use serde::Deserialize;
 
 use super::InstalledClient;
-use crate::ports::github::{
+use crate::domains::github::{
     CommitInfo,
     GitHubClient,
     GitHubError,

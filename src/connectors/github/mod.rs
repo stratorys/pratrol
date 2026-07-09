@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use jsonwebtoken::EncodingKey;
 use octocrab::Octocrab;
 
-use crate::ports::github::{
+use crate::domains::github::{
     GitHubApp,
     GitHubError,
 };

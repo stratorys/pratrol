@@ -10,22 +10,22 @@ use super::error::TriageError;
 use crate::domains::analysis::service::AnalysisService;
 use crate::domains::comment::entity::CommentPayload;
 use crate::domains::comment::service::CommentService;
+use crate::domains::github::{
+    GitHubApp,
+    GitHubClient,
+};
 use crate::domains::history::entity::HistorySignals;
 use crate::domains::history::service::{
     HistoryService,
     extract_title_keywords,
 };
+use crate::domains::llm::Llm;
 use crate::domains::scoring::entity::{
     ProfileSignals,
     QualitySignals,
     Score,
 };
 use crate::domains::scoring::service::ScoringService;
-use crate::ports::github::{
-    GitHubApp,
-    GitHubClient,
-};
-use crate::ports::mistral::MistralPort;
 
 const REPEAT_OFFENDER_LABEL: &str = "patrol:repeat-offender";
 const REPEAT_OFFENDER_COLOR: &str = "e4a012";
@@ -41,7 +41,7 @@ pub struct TriageService<G, M> {
     history: HistoryService,
 }
 
-impl<G: GitHubApp, M: MistralPort> TriageService<G, M> {
+impl<G: GitHubApp, M: Llm> TriageService<G, M> {
     pub fn new(
         github: Arc<G>,
         mistral: Arc<M>,
@@ -342,15 +342,15 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::connectors::mistral::MistralConnector;
-    use crate::domains::triage::entity::TriageId;
-    use crate::ports::github::{
+    use crate::domains::github::{
         CommitInfo,
         MockGitHubApp,
         MockGitHubClient,
         RejectedPrSearchResult,
         UserInfo,
     };
-    use crate::ports::mistral::MockMistralPort;
+    use crate::domains::llm::MockLlm;
+    use crate::domains::triage::entity::TriageId;
 
     fn sample_request() -> TriageRequest {
         TriageRequest {
@@ -490,17 +490,17 @@ mod tests {
         app
     }
 
-    fn successful_mistral_response() -> MockMistralPort {
-        let mut mistral = MockMistralPort::new();
+    fn successful_mistral_response() -> MockLlm {
+        let mut mistral = MockLlm::new();
         mistral.expect_chat_completion().returning(|_| {
             Ok(r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "A good PR.", "key_signal": "Clean code.", "recommendation": "Approve."}"#.to_owned())
         });
         mistral
     }
 
-    fn mistral_response(raw_json: &str) -> MockMistralPort {
+    fn mistral_response(raw_json: &str) -> MockLlm {
         let response = raw_json.to_owned();
-        let mut mistral = MockMistralPort::new();
+        let mut mistral = MockLlm::new();
         mistral
             .expect_chat_completion()
             .returning(move |_| Ok(response.clone()));
@@ -541,10 +541,10 @@ mod tests {
     #[tokio::test]
     async fn test_execute_mistral_failure_uses_fallback() {
         let github = Arc::new(setup_successful_app());
-        let mut mistral = MockMistralPort::new();
+        let mut mistral = MockLlm::new();
         mistral
             .expect_chat_completion()
-            .returning(|_| Err(crate::ports::mistral::MistralError::EmptyResponse));
+            .returning(|_| Err(crate::domains::llm::LlmError::EmptyResponse));
         let service = TriageService::new(github, Arc::new(mistral));
 
         let result = service.execute(sample_request()).await;
@@ -559,10 +559,10 @@ mod tests {
         let captured = Arc::new(Mutex::new(None));
         let diff = "diff --git a/src/lib.rs b/src/lib.rs\n+ fn ok() {}";
         let app = Arc::new(setup_replay_app(diff, Arc::clone(&captured)));
-        let mut mistral = MockMistralPort::new();
+        let mut mistral = MockLlm::new();
         mistral
             .expect_chat_completion()
-            .returning(|_| Err(crate::ports::mistral::MistralError::EmptyResponse));
+            .returning(|_| Err(crate::domains::llm::LlmError::EmptyResponse));
         let service = TriageService::new(app, Arc::new(mistral));
 
         let result = service.execute(sample_request()).await;
@@ -585,7 +585,7 @@ mod tests {
         app.expect_installation_client().returning(|_| {
             let jwt_error =
                 jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken);
-            Err(crate::ports::github::GitHubError::Jwt(jwt_error))
+            Err(crate::domains::github::GitHubError::Jwt(jwt_error))
         });
         let mistral = Arc::new(successful_mistral_response());
         let service = TriageService::new(Arc::new(app), mistral);

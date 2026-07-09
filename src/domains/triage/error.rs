@@ -1,4 +1,4 @@
-use crate::ports::github::GitHubError;
+use crate::domains::github::GitHubError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TriageError {

@@ -4,7 +4,7 @@ use super::entity::{
     HistoryResult,
     HistorySignals,
 };
-use crate::ports::github::RejectedPrInfo;
+use crate::domains::github::RejectedPrInfo;
 use crate::sanitize::{
     sanitize_markdown_text,
     sanitize_url,

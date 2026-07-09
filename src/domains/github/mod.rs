@@ -1,35 +1,14 @@
+pub mod entity;
+pub mod error;
+
 use async_trait::async_trait;
-
-#[derive(Debug, thiserror::Error)]
-pub enum GitHubError {
-    #[error(transparent)]
-    Api(#[from] octocrab::Error),
-
-    #[error(transparent)]
-    Jwt(#[from] jsonwebtoken::errors::Error),
-}
-
-pub struct UserInfo {
-    pub account_age_days: u32,
-    pub public_repos: u32,
-    pub followers: u32,
-}
-
-pub struct CommitInfo {
-    pub sha: String,
-    pub message: String,
-}
-
-pub struct RejectedPrInfo {
-    pub number: u64,
-    pub title: String,
-    pub html_url: String,
-}
-
-pub struct RejectedPrSearchResult {
-    pub total_count: u32,
-    pub items: Vec<RejectedPrInfo>,
-}
+pub use entity::{
+    CommitInfo,
+    RejectedPrInfo,
+    RejectedPrSearchResult,
+    UserInfo,
+};
+pub use error::GitHubError;
 
 #[cfg_attr(test, mockall::automock(type Client = MockGitHubClient;))]
 #[async_trait]

@@ -3,7 +3,7 @@ pub mod chat;
 use std::time::Duration;
 
 use crate::config::Config;
-use crate::ports::mistral::MistralError;
+use crate::domains::llm::LlmError;
 
 pub struct MistralConnector {
     http_client: reqwest::Client,
@@ -11,7 +11,7 @@ pub struct MistralConnector {
 }
 
 impl MistralConnector {
-    pub fn new(config: Config) -> Result<Self, MistralError> {
+    pub fn new(config: Config) -> Result<Self, LlmError> {
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_secs(60))
             .build()?;
