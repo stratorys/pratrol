@@ -1,4 +1,5 @@
 mod api;
+mod app;
 mod config;
 mod connectors;
 mod domains;
@@ -16,17 +17,12 @@ use tracing::{
 };
 use tracing_subscriber::EnvFilter;
 
+use crate::api::state::AppState;
+use crate::app::triage::service::TriageService;
 use crate::config::Config;
 use crate::connectors::github::GitHubConnector;
 use crate::connectors::mistral::MistralConnector;
-use crate::domains::triage::service::TriageService;
 use crate::error::AppError;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub triage_service: Arc<TriageService>,
-    pub webhook_secret: Arc<str>,
-}
 
 #[tokio::main]
 async fn main() -> ExitCode {

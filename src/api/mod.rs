@@ -1,5 +1,6 @@
 pub mod error;
 pub mod health;
+pub mod state;
 pub mod webhook;
 
 use axum::Router;
@@ -9,7 +10,7 @@ use axum::routing::{
     post,
 };
 
-use crate::AppState;
+use crate::api::state::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()

@@ -16,8 +16,8 @@ use tracing::{
     info,
 };
 
-use crate::AppState;
 use crate::api::error::ApiError;
+use crate::api::state::AppState;
 use crate::api::webhook::dto::WebhookEvent;
 use crate::domains::triage::entity::{
     TriageId,

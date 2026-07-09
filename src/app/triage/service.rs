@@ -5,8 +5,6 @@ use tracing::{
     warn,
 };
 
-use super::entity::TriageRequest;
-use super::error::TriageError;
 use crate::domains::analysis::service::AnalysisService;
 use crate::domains::comment::entity::CommentPayload;
 use crate::domains::comment::service::CommentService;
@@ -26,6 +24,8 @@ use crate::domains::scoring::entity::{
     Score,
 };
 use crate::domains::scoring::service::ScoringService;
+use crate::domains::triage::entity::TriageRequest;
+use crate::domains::triage::error::TriageError;
 
 const REPEAT_OFFENDER_LABEL: &str = "patrol:repeat-offender";
 const REPEAT_OFFENDER_COLOR: &str = "e4a012";
