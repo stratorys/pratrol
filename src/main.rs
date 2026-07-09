@@ -1,3 +1,4 @@
+mod agent;
 mod api;
 mod app;
 mod config;
@@ -20,9 +21,18 @@ use tracing_subscriber::EnvFilter;
 use crate::api::state::AppState;
 use crate::app::triage::service::TriageService;
 use crate::config::Config;
+#[cfg(feature = "gemma")]
+use crate::connectors::gemma::GemmaConnector;
 use crate::connectors::github::GitHubConnector;
+#[cfg(feature = "mistral")]
 use crate::connectors::mistral::MistralConnector;
+use crate::domains::llm::Llm;
 use crate::error::AppError;
+
+#[cfg(all(feature = "mistral", feature = "gemma"))]
+compile_error!("features `mistral` and `gemma` are mutually exclusive");
+#[cfg(not(any(feature = "mistral", feature = "gemma")))]
+compile_error!("enable exactly one LLM engine: `mistral` or `gemma`");
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -49,9 +59,12 @@ async fn run() -> Result<(), AppError> {
     let github =
         Arc::new(GitHubConnector::new(config.github_app_id, &config.github_private_key).await?);
 
-    let mistral = Arc::new(MistralConnector::new(config.clone())?);
+    #[cfg(feature = "mistral")]
+    let llm: Arc<dyn Llm> = Arc::new(MistralConnector::new(config.clone())?);
+    #[cfg(feature = "gemma")]
+    let llm: Arc<dyn Llm> = Arc::new(GemmaConnector::new(config.clone())?);
 
-    let triage_service = Arc::new(TriageService::new(github, mistral));
+    let triage_service = Arc::new(TriageService::new(github, llm));
 
     let state = AppState {
         triage_service,

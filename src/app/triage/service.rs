@@ -5,7 +5,7 @@ use tracing::{
     warn,
 };
 
-use crate::domains::analysis::service::AnalysisService;
+use crate::app::analysis::service::AnalysisService;
 use crate::domains::comment::entity::CommentPayload;
 use crate::domains::comment::service::CommentService;
 use crate::domains::github::{
@@ -333,6 +333,7 @@ fn empty_history_signals() -> HistorySignals {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "mistral")]
     use std::env;
     use std::sync::{
         Arc,
@@ -340,7 +341,9 @@ mod tests {
     };
 
     use super::*;
+    #[cfg(feature = "mistral")]
     use crate::config::Config;
+    #[cfg(feature = "mistral")]
     use crate::connectors::mistral::MistralConnector;
     use crate::domains::github::{
         CommitInfo,
@@ -682,6 +685,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "mistral")]
     fn replay_config_from_env() -> Option<Config> {
         let mistral_api_key = match env::var("MISTRAL_API_KEY") {
             Ok(value) if !value.trim().is_empty() => value,
@@ -703,6 +707,7 @@ mod tests {
         })
     }
 
+    #[cfg(feature = "mistral")]
     #[tokio::test]
     #[ignore = "requires network access and MISTRAL_API_KEY"]
     async fn test_replay_real_mistral_comment_in_terminal() {

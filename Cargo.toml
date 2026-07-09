@@ -6,6 +6,11 @@ authors = ["ljahier <lucas.jahier@stratorys.com>", "sehnryr <youn@melois.dev>"]
 description = "Pratrol, your intelligent PR triage for modern maintainers."
 license = "MPL-2.0"
 
+[features]
+default = ["mistral"]
+mistral = []
+gemma = []
+
 [dependencies]
 ammonia = "4.1.3"
 askama_escape = "0.16.0"

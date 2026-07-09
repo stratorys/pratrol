@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisResult {
     pub code_coherence: f64,
     pub commit_quality: f64,
