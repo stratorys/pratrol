@@ -7,6 +7,7 @@ use axum::http::{
 use axum::response::IntoResponse;
 use hmac::{
     Hmac,
+    KeyInit,
     Mac,
 };
 use sha2::Sha256;

@@ -706,8 +706,15 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires network access and MISTRAL_API_KEY"]
     async fn test_replay_real_mistral_comment_in_terminal() {
-        let config = replay_config_from_env()
-            .expect("set MISTRAL_API_KEY (and optionally MISTRAL_MODEL) before running");
+        let config = match replay_config_from_env() {
+            Some(config) => config,
+            None => {
+                eprintln!(
+                    "Skipping: set MISTRAL_API_KEY (and optionally MISTRAL_MODEL) before running."
+                );
+                return;
+            }
+        };
 
         let captured = Arc::new(Mutex::new(None));
         let diff = r#"diff --git a/src/auth/session_store.rs b/src/auth/session_store.rs
