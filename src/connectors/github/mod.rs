@@ -1,5 +1,7 @@
 pub mod client;
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use jsonwebtoken::EncodingKey;
 use octocrab::Octocrab;
@@ -48,13 +50,13 @@ impl GitHubApp for GitHubConnector {
     async fn installation_client(
         &self,
         installation_id: u64,
-    ) -> Result<Box<dyn GitHubClient>, GitHubError> {
+    ) -> Result<Arc<dyn GitHubClient>, GitHubError> {
         let (octocrab, _token) = self
             .app
             .installation_and_token(installation_id.into())
             .await?;
 
-        Ok(Box::new(InstalledClient {
+        Ok(Arc::new(InstalledClient {
             octocrab,
             bot_login: self.bot_login.clone(),
         }))

@@ -1,2 +1,2 @@
+pub mod compute;
 pub mod entity;
-pub mod service;

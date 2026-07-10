@@ -18,6 +18,7 @@ use tracing::{
 };
 use tracing_subscriber::EnvFilter;
 
+use crate::agent::harness::Harness;
 use crate::api::state::AppState;
 use crate::app::triage::service::TriageService;
 use crate::config::Config;
@@ -60,11 +61,11 @@ async fn run() -> Result<(), AppError> {
         Arc::new(GitHubConnector::new(config.github_app_id, &config.github_private_key).await?);
 
     #[cfg(feature = "mistral")]
-    let llm: Arc<dyn Llm> = Arc::new(MistralConnector::new(config.clone())?);
+    let llm: Arc<dyn Llm> = Arc::new(MistralConnector::new(&config)?);
     #[cfg(feature = "gemma")]
-    let llm: Arc<dyn Llm> = Arc::new(GemmaConnector::new(config.clone())?);
+    let llm: Arc<dyn Llm> = Arc::new(GemmaConnector::new(&config)?);
 
-    let triage_service = Arc::new(TriageService::new(github, llm));
+    let triage_service = Arc::new(TriageService::new(github, Harness::new(llm)));
 
     let state = AppState {
         triage_service,

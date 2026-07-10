@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use tracing::warn;
 
 use super::entity::{
@@ -28,46 +30,36 @@ const STOP_WORDS: &[&str] = &[
 const MIN_KEYWORD_LEN: usize = 3;
 const TARGET_KEYWORDS: usize = 3;
 
-pub struct HistoryService;
+pub fn history(
+    signals: &HistorySignals,
+    current_pr_number: u64,
+) -> HistoryResult {
+    let author_repo_penalty = (f64::from(signals.author_in_repo) / AUTHOR_REPO_DIVISOR).min(1.0)
+        * AUTHOR_REPO_PENALTY_MAX;
 
-impl HistoryService {
-    pub fn new() -> Self { Self }
+    let title_penalty =
+        (f64::from(signals.title_in_repo) / TITLE_DIVISOR).min(1.0) * TITLE_PENALTY_MAX;
 
-    pub fn evaluate(
-        &self,
-        signals: &HistorySignals,
-        current_pr_number: u64,
-    ) -> HistoryResult {
-        let author_repo_penalty =
-            (f64::from(signals.rejected_by_author_in_repo) / AUTHOR_REPO_DIVISOR).min(1.0)
-                * AUTHOR_REPO_PENALTY_MAX;
+    let global_penalty = (f64::from(signals.author_global) / AUTHOR_GLOBAL_DIVISOR).min(1.0)
+        * AUTHOR_GLOBAL_PENALTY_MAX;
 
-        let title_penalty = (f64::from(signals.rejected_by_title_in_repo) / TITLE_DIVISOR).min(1.0)
-            * TITLE_PENALTY_MAX;
+    let penalty = author_repo_penalty + title_penalty + global_penalty;
+    let is_repeat_offender = signals.author_in_repo >= REPEAT_OFFENDER_THRESHOLD;
 
-        let global_penalty = (f64::from(signals.rejected_by_author_global) / AUTHOR_GLOBAL_DIVISOR)
-            .min(1.0)
-            * AUTHOR_GLOBAL_PENALTY_MAX;
+    let history_section = render_history_section(signals, current_pr_number, is_repeat_offender);
 
-        let penalty = author_repo_penalty + title_penalty + global_penalty;
-        let is_repeat_offender = signals.rejected_by_author_in_repo >= REPEAT_OFFENDER_THRESHOLD;
-
-        let history_section =
-            render_history_section(signals, current_pr_number, is_repeat_offender);
-
-        HistoryResult {
-            penalty,
-            is_repeat_offender,
-            history_section,
-        }
+    HistoryResult {
+        penalty,
+        is_repeat_offender,
+        history_section,
     }
 }
 
-pub fn extract_title_keywords(title: &str) -> Option<String> {
+pub fn title_keywords(title: &str) -> Option<String> {
     let words: Vec<String> = title
         .split(|c: char| !c.is_alphanumeric())
         .filter(|w| w.len() >= MIN_KEYWORD_LEN)
-        .map(|w| w.to_ascii_lowercase())
+        .map(str::to_ascii_lowercase)
         .filter(|w| !STOP_WORDS.contains(&w.as_str()))
         .take(TARGET_KEYWORDS)
         .collect();
@@ -84,9 +76,9 @@ fn render_history_section(
     current_pr_number: u64,
     is_repeat_offender: bool,
 ) -> String {
-    let has_author_repo = signals.rejected_by_author_in_repo > 0;
-    let has_title = signals.rejected_by_title_in_repo > 0;
-    let has_global = signals.rejected_by_author_global > 0;
+    let has_author_repo = signals.author_in_repo > 0;
+    let has_title = signals.title_in_repo > 0;
+    let has_global = signals.author_global > 0;
 
     if !has_author_repo && !has_title && !has_global {
         return String::new();
@@ -103,34 +95,37 @@ fn render_history_section(
     }
 
     if has_author_repo {
-        section.push_str(&format!(
-            "**{} closed-without-merge PR(s) by this author** in this repo:\n",
-            signals.rejected_by_author_in_repo
-        ));
+        let _ = writeln!(
+            section,
+            "**{} closed-without-merge PR(s) by this author** in this repo:",
+            signals.author_in_repo
+        );
         append_pr_list(
             &mut section,
-            &signals.rejected_by_author_in_repo_items,
+            &signals.author_in_repo_items,
             current_pr_number,
         );
     }
 
     if has_title {
-        section.push_str(&format!(
-            "**{} similar PR(s)** (by title) in this repo:\n",
-            signals.rejected_by_title_in_repo
-        ));
+        let _ = writeln!(
+            section,
+            "**{} similar PR(s)** (by title) in this repo:",
+            signals.title_in_repo
+        );
         append_pr_list(
             &mut section,
-            &signals.rejected_by_title_in_repo_items,
+            &signals.title_in_repo_items,
             current_pr_number,
         );
     }
 
     if has_global {
-        section.push_str(&format!(
-            "**{} closed-without-merge PR(s) by this author** across all repos.\n",
-            signals.rejected_by_author_global
-        ));
+        let _ = writeln!(
+            section,
+            "**{} closed-without-merge PR(s) by this author** across all repos.",
+            signals.author_global
+        );
     }
 
     section
@@ -146,20 +141,14 @@ fn append_pr_list(
             continue;
         }
         let safe_title = sanitize_markdown_text(&item.title);
-        match sanitize_url(&item.html_url) {
-            Some(safe_url) => {
-                output.push_str(&format!(
-                    "- [#{}]({safe_url}) — {safe_title}\n",
-                    item.number,
-                ));
-            }
-            None => {
-                warn!(
-                    message = "Dropped non-HTTPS URL from history section.",
-                    pr_number = item.number,
-                );
-                output.push_str(&format!("- #{} — {safe_title}\n", item.number));
-            }
+        if let Some(safe_url) = sanitize_url(&item.html_url) {
+            let _ = writeln!(output, "- [#{}]({safe_url}) — {safe_title}", item.number);
+        } else {
+            warn!(
+                message = "Dropped non-HTTPS URL from history section.",
+                pr_number = item.number,
+            );
+            let _ = writeln!(output, "- #{} — {safe_title}", item.number);
         }
     }
     output.push('\n');
@@ -171,18 +160,17 @@ mod tests {
 
     fn empty_signals() -> HistorySignals {
         HistorySignals {
-            rejected_by_author_in_repo: 0,
-            rejected_by_author_in_repo_items: vec![],
-            rejected_by_title_in_repo: 0,
-            rejected_by_title_in_repo_items: vec![],
-            rejected_by_author_global: 0,
+            author_in_repo: 0,
+            author_in_repo_items: vec![],
+            title_in_repo: 0,
+            title_in_repo_items: vec![],
+            author_global: 0,
         }
     }
 
     #[test]
     fn test_zero_history_produces_no_penalty() {
-        let service = HistoryService::new();
-        let result = service.evaluate(&empty_signals(), 1);
+        let result = history(&empty_signals(), 1);
         assert!(
             (result.penalty - 0.0).abs() < f64::EPSILON,
             "penalty should be zero"
@@ -196,15 +184,14 @@ mod tests {
 
     #[test]
     fn test_moderate_history_applies_penalty() {
-        let service = HistoryService::new();
         let signals = HistorySignals {
-            rejected_by_author_in_repo: 2,
-            rejected_by_author_in_repo_items: vec![],
-            rejected_by_title_in_repo: 1,
-            rejected_by_title_in_repo_items: vec![],
-            rejected_by_author_global: 5,
+            author_in_repo: 2,
+            author_in_repo_items: vec![],
+            title_in_repo: 1,
+            title_in_repo_items: vec![],
+            author_global: 5,
         };
-        let result = service.evaluate(&signals, 1);
+        let result = history(&signals, 1);
 
         let expected_author_repo = (2.0 / 5.0) * 10.0;
         let expected_title = (1.0 / 3.0) * 5.0;
@@ -225,10 +212,9 @@ mod tests {
 
     #[test]
     fn test_repeat_offender_threshold() {
-        let service = HistoryService::new();
         let signals = HistorySignals {
-            rejected_by_author_in_repo: 3,
-            rejected_by_author_in_repo_items: vec![
+            author_in_repo: 3,
+            author_in_repo_items: vec![
                 RejectedPrInfo {
                     number: 10,
                     title: "Bad PR 1".to_owned(),
@@ -240,11 +226,11 @@ mod tests {
                     html_url: "https://github.com/o/r/pull/20".to_owned(),
                 },
             ],
-            rejected_by_title_in_repo: 0,
-            rejected_by_title_in_repo_items: vec![],
-            rejected_by_author_global: 0,
+            title_in_repo: 0,
+            title_in_repo_items: vec![],
+            author_global: 0,
         };
-        let result = service.evaluate(&signals, 42);
+        let result = history(&signals, 42);
 
         assert!(
             result.is_repeat_offender,
@@ -262,15 +248,14 @@ mod tests {
 
     #[test]
     fn test_penalty_caps_at_maximum() {
-        let service = HistoryService::new();
         let signals = HistorySignals {
-            rejected_by_author_in_repo: 100,
-            rejected_by_author_in_repo_items: vec![],
-            rejected_by_title_in_repo: 100,
-            rejected_by_title_in_repo_items: vec![],
-            rejected_by_author_global: 500,
+            author_in_repo: 100,
+            author_in_repo_items: vec![],
+            title_in_repo: 100,
+            title_in_repo_items: vec![],
+            author_global: 500,
         };
-        let result = service.evaluate(&signals, 1);
+        let result = history(&signals, 1);
         let max_penalty = 10.0 + 5.0 + 5.0;
         assert!(
             (result.penalty - max_penalty).abs() < f64::EPSILON,
@@ -281,43 +266,42 @@ mod tests {
 
     #[test]
     fn test_extract_keywords_normal_title() {
-        let result = extract_title_keywords("Add user authentication middleware");
+        let result = title_keywords("Add user authentication middleware");
         assert_eq!(result, Some("user authentication middleware".to_owned()));
     }
 
     #[test]
     fn test_extract_keywords_with_stop_words() {
-        let result = extract_title_keywords("fix: update the broken login flow");
+        let result = title_keywords("fix: update the broken login flow");
         assert_eq!(result, Some("broken login flow".to_owned()));
     }
 
     #[test]
     fn test_extract_keywords_too_short() {
-        let result = extract_title_keywords("fix a bug");
+        let result = title_keywords("fix a bug");
         assert_eq!(result, Some("bug".to_owned()));
     }
 
     #[test]
     fn test_extract_keywords_empty() {
-        let result = extract_title_keywords("fix: add a");
+        let result = title_keywords("fix: add a");
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_current_pr_excluded_from_list() {
-        let service = HistoryService::new();
         let signals = HistorySignals {
-            rejected_by_author_in_repo: 1,
-            rejected_by_author_in_repo_items: vec![RejectedPrInfo {
+            author_in_repo: 1,
+            author_in_repo_items: vec![RejectedPrInfo {
                 number: 42,
                 title: "Same PR".to_owned(),
                 html_url: "https://github.com/o/r/pull/42".to_owned(),
             }],
-            rejected_by_title_in_repo: 0,
-            rejected_by_title_in_repo_items: vec![],
-            rejected_by_author_global: 0,
+            title_in_repo: 0,
+            title_in_repo_items: vec![],
+            author_global: 0,
         };
-        let result = service.evaluate(&signals, 42);
+        let result = history(&signals, 42);
         assert!(
             !result.history_section.contains("[#42]"),
             "current PR should be excluded from the list"
@@ -326,19 +310,18 @@ mod tests {
 
     #[test]
     fn test_history_section_sanitizes_title_and_mentions() {
-        let service = HistoryService::new();
         let signals = HistorySignals {
-            rejected_by_author_in_repo: 1,
-            rejected_by_author_in_repo_items: vec![RejectedPrInfo {
+            author_in_repo: 1,
+            author_in_repo_items: vec![RejectedPrInfo {
                 number: 41,
                 title: "Ping @security-team [x](y) <script>alert(1)</script>".to_owned(),
                 html_url: "https://github.com/o/r/pull/41".to_owned(),
             }],
-            rejected_by_title_in_repo: 0,
-            rejected_by_title_in_repo_items: vec![],
-            rejected_by_author_global: 0,
+            title_in_repo: 0,
+            title_in_repo_items: vec![],
+            author_global: 0,
         };
-        let result = service.evaluate(&signals, 42);
+        let result = history(&signals, 42);
         assert!(
             result.history_section.contains("@\u{200B}security-team"),
             "mentions in history titles should be neutralized: {}",
@@ -358,19 +341,18 @@ mod tests {
 
     #[test]
     fn test_history_section_rejects_non_https_url() {
-        let service = HistoryService::new();
         let signals = HistorySignals {
-            rejected_by_author_in_repo: 1,
-            rejected_by_author_in_repo_items: vec![RejectedPrInfo {
+            author_in_repo: 1,
+            author_in_repo_items: vec![RejectedPrInfo {
                 number: 41,
                 title: "Some PR".to_owned(),
                 html_url: "javascript:alert(1)".to_owned(),
             }],
-            rejected_by_title_in_repo: 0,
-            rejected_by_title_in_repo_items: vec![],
-            rejected_by_author_global: 0,
+            title_in_repo: 0,
+            title_in_repo_items: vec![],
+            author_global: 0,
         };
-        let result = service.evaluate(&signals, 42);
+        let result = history(&signals, 42);
         assert!(
             !result.history_section.contains("javascript:"),
             "non-https URL should be dropped: {}",

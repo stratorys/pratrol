@@ -5,20 +5,24 @@ use std::time::Duration;
 use crate::config::Config;
 use crate::domains::llm::LlmError;
 
+const REQUEST_TIMEOUT: Duration = Duration::from_mins(1);
+
 pub struct MistralConnector {
     http_client: reqwest::Client,
-    config: Config,
+    api_key: String,
+    model: String,
 }
 
 impl MistralConnector {
-    pub fn new(config: Config) -> Result<Self, LlmError> {
+    pub fn new(config: &Config) -> Result<Self, LlmError> {
         let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(60))
+            .timeout(REQUEST_TIMEOUT)
             .build()?;
 
         Ok(Self {
             http_client,
-            config,
+            api_key: config.mistral_api_key.clone(),
+            model: config.mistral_model.clone(),
         })
     }
 }

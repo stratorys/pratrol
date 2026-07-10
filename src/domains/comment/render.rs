@@ -4,55 +4,46 @@ use crate::sanitize::sanitize_plain_text;
 const TRIAGE_TEMPLATE: &str = include_str!("templates/triage.md");
 const PARTIAL_NOTE: &str = include_str!("templates/partial_note.md");
 
-pub struct CommentService;
+pub fn markdown(payload: &CommentPayload) -> String {
+    let profile_badge = tier_badge(&payload.profile_tier_icon, &payload.profile_tier_label);
+    let quality_badge = tier_badge(&payload.quality_tier_icon, &payload.quality_tier_label);
+    let combined_badge = tier_badge(&payload.combined_tier_icon, &payload.combined_tier_label);
 
-impl CommentService {
-    pub fn new() -> Self { Self }
+    let mut output = TRIAGE_TEMPLATE
+        .replace(
+            "{{profile_score}}",
+            &format!("{:.0}", payload.profile_score),
+        )
+        .replace("{{profile_badge}}", profile_badge)
+        .replace("{{profile_tier}}", &payload.profile_tier_label)
+        .replace(
+            "{{quality_score}}",
+            &format!("{:.0}", payload.quality_score),
+        )
+        .replace("{{quality_badge}}", quality_badge)
+        .replace("{{quality_tier}}", &payload.quality_tier_label)
+        .replace(
+            "{{combined_score}}",
+            &format!("{:.0}", payload.combined_score),
+        )
+        .replace("{{combined_badge}}", combined_badge)
+        .replace("{{combined_tier}}", &payload.combined_tier_label)
+        .replace("{{summary}}", &sanitize_plain_text(&payload.summary))
+        .replace("{{key_signal}}", &sanitize_plain_text(&payload.key_signal))
+        .replace(
+            "{{recommendation}}",
+            &sanitize_plain_text(&payload.recommendation),
+        );
 
-    pub fn render(
-        &self,
-        payload: &CommentPayload,
-    ) -> String {
-        let profile_badge = tier_badge(&payload.profile_tier_icon, &payload.profile_tier_label);
-        let quality_badge = tier_badge(&payload.quality_tier_icon, &payload.quality_tier_label);
-        let combined_badge = tier_badge(&payload.combined_tier_icon, &payload.combined_tier_label);
-
-        let mut output = TRIAGE_TEMPLATE
-            .replace(
-                "{{profile_score}}",
-                &format!("{:.0}", payload.profile_score),
-            )
-            .replace("{{profile_badge}}", profile_badge)
-            .replace("{{profile_tier}}", &payload.profile_tier_label)
-            .replace(
-                "{{quality_score}}",
-                &format!("{:.0}", payload.quality_score),
-            )
-            .replace("{{quality_badge}}", quality_badge)
-            .replace("{{quality_tier}}", &payload.quality_tier_label)
-            .replace(
-                "{{combined_score}}",
-                &format!("{:.0}", payload.combined_score),
-            )
-            .replace("{{combined_badge}}", combined_badge)
-            .replace("{{combined_tier}}", &payload.combined_tier_label)
-            .replace("{{summary}}", &sanitize_plain_text(&payload.summary))
-            .replace("{{key_signal}}", &sanitize_plain_text(&payload.key_signal))
-            .replace(
-                "{{recommendation}}",
-                &sanitize_plain_text(&payload.recommendation),
-            );
-
-        if !payload.history_section.is_empty() {
-            output.push_str(&payload.history_section);
-        }
-
-        if payload.analysis_partial {
-            output.push_str(PARTIAL_NOTE);
-        }
-
-        output
+    if !payload.history_section.is_empty() {
+        output.push_str(&payload.history_section);
     }
+
+    if payload.analysis_partial {
+        output.push_str(PARTIAL_NOTE);
+    }
+
+    output
 }
 
 fn tier_badge(
@@ -97,8 +88,7 @@ mod tests {
 
     #[test]
     fn test_render_contains_scores_and_tiers() {
-        let service = CommentService::new();
-        let output = service.render(&sample_payload(false));
+        let output = markdown(&sample_payload(false));
         assert!(
             output.contains("Pratrol Triage Brief"),
             "should contain brief heading"
@@ -135,8 +125,7 @@ mod tests {
 
     #[test]
     fn test_render_partial_appends_note() {
-        let service = CommentService::new();
-        let output = service.render(&sample_payload(true));
+        let output = markdown(&sample_payload(true));
         assert!(
             output.contains("AI analysis was unavailable"),
             "should contain partial note"
@@ -145,11 +134,10 @@ mod tests {
 
     #[test]
     fn test_render_sanitizes_ai_text_fields() {
-        let service = CommentService::new();
         let mut payload = sample_payload(false);
         payload.summary = "Ping @security-team <script>alert(1)</script>".to_owned();
 
-        let output = service.render(&payload);
+        let output = markdown(&payload);
         assert!(
             output.contains("@\u{200B}security-team"),
             "should neutralize mentions"
@@ -166,11 +154,10 @@ mod tests {
 
     #[test]
     fn test_render_handles_unicode_without_panicking() {
-        let service = CommentService::new();
         let mut payload = sample_payload(false);
         payload.summary = "é".repeat(301);
 
-        let output = service.render(&payload);
+        let output = markdown(&payload);
 
         assert!(
             output.contains("…"),

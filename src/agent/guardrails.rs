@@ -1,5 +1,5 @@
-use super::entity::GuardrailViolation;
-use crate::app::analysis::SENTINEL_PREFIX;
+use super::error::GuardrailViolation;
+use crate::domains::analysis::SENTINEL_PREFIX;
 use crate::domains::analysis::entity::AnalysisResult;
 
 const SUSPICIOUS_APPROVAL_THRESHOLD: f64 = 8.0;

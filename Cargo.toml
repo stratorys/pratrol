@@ -5,6 +5,9 @@ edition = "2024"
 authors = ["ljahier <lucas.jahier@stratorys.com>", "sehnryr <youn@melois.dev>"]
 description = "Pratrol, your intelligent PR triage for modern maintainers."
 license = "MPL-2.0"
+repository = "https://github.com/stratorys/pratrol"
+keywords = ["pr", "triage", "github", "ai", "review"]
+categories = ["development-tools"]
 
 [features]
 default = ["mistral"]
@@ -35,11 +38,11 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.23.4", features = ["v4"] }
 
-[workspace.lints.rust]
+[lints.rust]
 warnings = "deny"
 unsafe_code = "deny"
 
-[workspace.lints.clippy]
+[lints.clippy]
 cargo      = { level = "deny", priority = -1 }
 complexity = { level = "deny", priority = -1 }
 pedantic   = { level = "deny", priority = -1 }
@@ -49,7 +52,6 @@ suspicious = { level = "deny", priority = -1 }
 
 allow_attributes_without_reason = "deny"
 missing_assert_message = "deny"
-missing_docs_in_private_items = "deny"
 multiple_crate_versions = "allow"
 self_named_module_files = "deny"
 semicolon_outside_block = "deny"

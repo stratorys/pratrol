@@ -3,38 +3,35 @@ use std::sync::Arc;
 use super::entity::{
     AgentInput,
     AgentOutcome,
-    DegradeReason,
 };
-use super::executor::Executor;
+use super::error::DegradeReason;
 use super::guardrails;
-use crate::app::analysis::service::AnalysisService;
+use crate::domains::analysis::{
+    parse,
+    prompt,
+};
 use crate::domains::llm::Llm;
 
 pub struct Harness {
     llm: Arc<dyn Llm>,
-    analysis: AnalysisService,
 }
 
 impl Harness {
     pub fn new(llm: Arc<dyn Llm>) -> Self {
         Self {
             llm,
-            analysis: AnalysisService::new(),
         }
     }
 
-    pub async fn run<E: Executor>(
+    pub async fn run(
         &self,
         input: &AgentInput<'_>,
-        executor: &E,
-    ) -> Result<(), E::Error> {
-        let prompt = self
-            .analysis
-            .build_prompt(input.diff, input.commit_messages);
+    ) -> AgentOutcome {
+        let request = prompt::build(input.diff, input.commit_messages);
 
-        let outcome = match self.llm.chat_completion(&prompt).await {
+        match self.llm.chat_completion(&request).await {
             Err(error) => AgentOutcome::Degraded(DegradeReason::LlmUnavailable(error)),
-            Ok(raw) => match self.analysis.parse_response(&raw) {
+            Ok(raw) => match parse::response(&raw) {
                 Err(error) => AgentOutcome::Degraded(DegradeReason::UnparsableResponse(error)),
                 Ok(analysis) => {
                     let violations = guardrails::evaluate(&raw, &analysis);
@@ -45,48 +42,20 @@ impl Harness {
                     }
                 }
             },
-        };
-
-        executor.execute(outcome).await
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
-    use std::sync::Mutex;
-
-    use async_trait::async_trait;
-
     use super::*;
-    use crate::agent::entity::GuardrailViolation;
-    use crate::app::analysis::SENTINEL_PREFIX;
+    use crate::agent::error::GuardrailViolation;
+    use crate::domains::analysis::SENTINEL_PREFIX;
     use crate::domains::analysis::error::AnalysisError;
     use crate::domains::llm::{
         LlmError,
         MockLlm,
     };
-
-    struct RecordingExecutor {
-        captured: Mutex<Option<AgentOutcome>>,
-    }
-
-    #[async_trait]
-    impl Executor for RecordingExecutor {
-        type Error = Infallible;
-
-        async fn execute(
-            &self,
-            outcome: AgentOutcome,
-        ) -> Result<(), Self::Error> {
-            let mut slot = self
-                .captured
-                .lock()
-                .expect("capture lock should not be poisoned");
-            *slot = Some(outcome);
-            Ok(())
-        }
-    }
 
     fn mock_ok(raw: &str) -> MockLlm {
         let response = raw.to_owned();
@@ -103,19 +72,7 @@ mod tests {
             diff: "diff --git a/file.rs b/file.rs",
             commit_messages: &commits,
         };
-        let executor = RecordingExecutor {
-            captured: Mutex::new(None),
-        };
-
-        let result = harness.run(&input, &executor).await;
-        assert!(result.is_ok(), "run should complete");
-
-        executor
-            .captured
-            .lock()
-            .expect("capture lock should not be poisoned")
-            .take()
-            .expect("an outcome should be recorded")
+        harness.run(&input).await
     }
 
     #[tokio::test]

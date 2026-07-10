@@ -2,8 +2,8 @@
 /// comments.
 ///
 /// Two levels of sanitization:
-/// - `sanitize_plain_text`: for AI-generated fields (summary, key_signal,
-///   recommendation) that are placed inside pre-defined Markdown structures.
+/// - `sanitize_plain_text`: for AI-generated fields (summary, `key_signal`,
+///   `recommendation`) that are placed inside pre-defined Markdown structures.
 ///   HTML-escapes via `askama_escape` and neutralizes `@mentions`.
 /// - `sanitize_markdown_text`: for external content (PR titles) that may
 ///   contain attacker-crafted Markdown. Uses `ammonia` to strip all

@@ -45,7 +45,7 @@ impl Llm for MistralConnector {
         request: &ChatRequest,
     ) -> Result<String, LlmError> {
         let request = MistralChatRequest {
-            model: self.config.mistral_model.to_owned(),
+            model: self.model.clone(),
             messages: vec![
                 ChatMessage {
                     role: "system".to_owned(),
@@ -61,10 +61,7 @@ impl Llm for MistralConnector {
         let response = self
             .http_client
             .post("https://api.mistral.ai/v1/chat/completions")
-            .header(
-                "Authorization",
-                format!("Bearer {}", self.config.mistral_api_key),
-            )
+            .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)
             .send()
             .await?

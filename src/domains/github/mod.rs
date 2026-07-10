@@ -1,6 +1,8 @@
 pub mod entity;
 pub mod error;
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 pub use entity::{
     CommitInfo,
@@ -16,7 +18,7 @@ pub trait GitHubApp: Send + Sync {
     async fn installation_client(
         &self,
         installation_id: u64,
-    ) -> Result<Box<dyn GitHubClient>, GitHubError>;
+    ) -> Result<Arc<dyn GitHubClient>, GitHubError>;
 }
 
 #[cfg_attr(test, mockall::automock)]

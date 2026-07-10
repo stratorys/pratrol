@@ -33,9 +33,8 @@ pub async fn handle_webhook(
 ) -> Result<impl IntoResponse, ApiError> {
     verify_signature(&state.webhook_secret, &headers, &body)?;
 
-    let event_type = match headers.get("X-GitHub-Event").and_then(|v| v.to_str().ok()) {
-        Some(event_type) => event_type,
-        None => return Ok(StatusCode::OK),
+    let Some(event_type) = headers.get("X-GitHub-Event").and_then(|v| v.to_str().ok()) else {
+        return Ok(StatusCode::OK);
     };
 
     if event_type != "pull_request" {

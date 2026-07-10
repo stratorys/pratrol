@@ -1,11 +1,11 @@
 use crate::domains::github::RejectedPrInfo;
 
 pub struct HistorySignals {
-    pub rejected_by_author_in_repo: u32,
-    pub rejected_by_author_in_repo_items: Vec<RejectedPrInfo>,
-    pub rejected_by_title_in_repo: u32,
-    pub rejected_by_title_in_repo_items: Vec<RejectedPrInfo>,
-    pub rejected_by_author_global: u32,
+    pub author_in_repo: u32,
+    pub author_in_repo_items: Vec<RejectedPrInfo>,
+    pub title_in_repo: u32,
+    pub title_in_repo_items: Vec<RejectedPrInfo>,
+    pub author_global: u32,
 }
 
 pub struct HistoryResult {

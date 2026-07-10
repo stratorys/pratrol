@@ -5,25 +5,30 @@ use tracing::{
     warn,
 };
 
-use crate::app::analysis::service::AnalysisService;
+use crate::agent::entity::{
+    AgentInput,
+    AgentOutcome,
+};
+use crate::agent::error::DegradeReason;
+use crate::agent::harness::Harness;
 use crate::domains::comment::entity::CommentPayload;
-use crate::domains::comment::service::CommentService;
+use crate::domains::comment::render;
 use crate::domains::github::{
     GitHubApp,
     GitHubClient,
 };
-use crate::domains::history::entity::HistorySignals;
-use crate::domains::history::service::{
-    HistoryService,
-    extract_title_keywords,
+use crate::domains::history::entity::{
+    HistoryResult,
+    HistorySignals,
 };
-use crate::domains::llm::Llm;
+use crate::domains::history::evaluate;
+use crate::domains::scoring::compute;
 use crate::domains::scoring::entity::{
     ProfileSignals,
     QualitySignals,
     Score,
+    Tier,
 };
-use crate::domains::scoring::service::ScoringService;
 use crate::domains::triage::entity::TriageRequest;
 use crate::domains::triage::error::TriageError;
 
@@ -34,25 +39,17 @@ const PARTIAL_ANALYSIS_SCORE_CAP: f64 = 39.0;
 
 pub struct TriageService {
     github: Arc<dyn GitHubApp>,
-    mistral: Arc<dyn Llm>,
-    scoring: ScoringService,
-    analysis: AnalysisService,
-    comment: CommentService,
-    history: HistoryService,
+    harness: Harness,
 }
 
 impl TriageService {
     pub fn new(
         github: Arc<dyn GitHubApp>,
-        mistral: Arc<dyn Llm>,
+        harness: Harness,
     ) -> Self {
         Self {
             github,
-            mistral,
-            scoring: ScoringService::new(),
-            analysis: AnalysisService::new(),
-            comment: CommentService::new(),
-            history: HistoryService::new(),
+            harness,
         }
     }
 
@@ -104,87 +101,90 @@ impl TriageService {
             org_memberships: orgs_count,
         };
 
-        let profile_score = self.scoring.compute_profile_score(&profile_signals);
+        let profile_score = compute::profile_score(&profile_signals);
 
         let commit_messages: Vec<&str> = commits.iter().map(|ci| ci.message.as_str()).collect();
-        let prompt = self.analysis.build_prompt(&diff, &commit_messages);
+        let analysis = self.analyze(&diff, &commit_messages).await;
 
-        let analysis_result = match self.mistral.chat_completion(&prompt).await {
-            Ok(raw_response) => match self.analysis.parse_response(&raw_response) {
-                Ok(analysis) => {
-                    let quality_signals = QualitySignals {
-                        code_coherence: analysis.code_coherence,
-                        commit_quality: analysis.commit_quality,
-                        risk_level: analysis.risk_level,
-                        suspicious_patterns: analysis.suspicious_patterns,
-                    };
-                    let score = self.scoring.compute_quality_score(&quality_signals);
-                    FallbackAnalysis {
-                        quality_score: score,
-                        summary: analysis.summary,
-                        key_signal: analysis.key_signal,
-                        recommendation: analysis.recommendation,
-                        analysis_partial: false,
-                    }
-                }
-                Err(error) => {
-                    warn!(message = "Failed to parse Mistral response.", %error);
-                    FallbackAnalysis::default()
-                }
-            },
-            Err(error) => {
-                warn!(message = "Mistral API call failed.", %error);
-                FallbackAnalysis::default()
-            }
-        };
+        let history_result = evaluate::history(&history_signals, pr_number);
+        let scores = resolve_scores(&profile_score, &analysis, &history_result);
 
-        let history_result = self.history.evaluate(&history_signals, pr_number);
-
-        let (raw_combined_score, _) = self
-            .scoring
-            .combine(profile_score.value, analysis_result.quality_score.value);
-
-        let adjusted_score = (raw_combined_score - history_result.penalty).max(0.0);
-        let adjusted_score = if analysis_result.analysis_partial {
-            adjusted_score.min(PARTIAL_ANALYSIS_SCORE_CAP)
-        } else {
-            adjusted_score
-        };
-        let combined_tier = self.scoring.tier_from_score(adjusted_score);
-
-        let profile_tier = self.scoring.tier_from_score(profile_score.value);
-        let quality_tier = self
-            .scoring
-            .tier_from_score(analysis_result.quality_score.value);
-
-        let comment_payload = CommentPayload {
-            profile_score: profile_score.value,
-            profile_tier_label: profile_tier.to_string(),
-            profile_tier_icon: profile_tier.icon().to_owned(),
-            quality_score: analysis_result.quality_score.value,
-            quality_tier_label: quality_tier.to_string(),
-            quality_tier_icon: quality_tier.icon().to_owned(),
-            combined_score: adjusted_score,
-            combined_tier_label: combined_tier.to_string(),
-            combined_tier_icon: combined_tier.icon().to_owned(),
-            summary: analysis_result.summary,
-            key_signal: analysis_result.key_signal,
-            recommendation: analysis_result.recommendation,
-            analysis_partial: analysis_result.analysis_partial,
-            history_section: history_result.history_section,
-        };
-
-        let markdown = self.comment.render(&comment_payload);
+        let payload = build_comment_payload(
+            &profile_score,
+            analysis,
+            &scores,
+            history_result.history_section.clone(),
+        );
+        let markdown = render::markdown(&payload);
 
         let head_commit = commits.last().ok_or(TriageError::NoCommits)?;
 
+        self.publish_review(
+            client.as_ref(),
+            &request,
+            &markdown,
+            &head_commit.sha,
+            &scores,
+            &history_result,
+        )
+        .await
+    }
+
+    async fn analyze(
+        &self,
+        diff: &str,
+        commit_messages: &[&str],
+    ) -> ResolvedAnalysis {
+        let input = AgentInput {
+            diff,
+            commit_messages,
+        };
+        match self.harness.run(&input).await {
+            AgentOutcome::Validated(analysis) => {
+                let quality_signals = QualitySignals {
+                    code_coherence: analysis.code_coherence,
+                    commit_quality: analysis.commit_quality,
+                    risk_level: analysis.risk_level,
+                    suspicious_patterns: analysis.suspicious_patterns,
+                };
+                let score = compute::quality_score(&quality_signals);
+                ResolvedAnalysis {
+                    quality_score: score,
+                    summary: analysis.summary,
+                    key_signal: analysis.key_signal,
+                    recommendation: analysis.recommendation,
+                    analysis_partial: false,
+                }
+            }
+            AgentOutcome::Degraded(reason) => {
+                warn!(message = "Agent degraded, using fallback analysis.", %reason);
+                ResolvedAnalysis::degraded(&reason)
+            }
+        }
+    }
+
+    async fn publish_review(
+        &self,
+        client: &dyn GitHubClient,
+        request: &TriageRequest,
+        markdown: &str,
+        head_sha: &str,
+        scores: &ResolvedScores,
+        history: &HistoryResult,
+    ) -> Result<(), TriageError> {
+        let owner = &request.owner;
+        let repo = &request.repo;
+        let pr_number = request.pr_number;
+        let triage_id = &request.id;
+        let combined_tier = scores.combined_tier;
+
         client
-            .post_review(owner, repo, pr_number, &head_commit.sha, &markdown)
+            .post_review(owner, repo, pr_number, head_sha, markdown)
             .await?;
 
         let mut labels_to_apply = vec![combined_tier.label().to_owned()];
 
-        if history_result.is_repeat_offender {
+        if history.is_repeat_offender {
             labels_to_apply.push(REPEAT_OFFENDER_LABEL.to_owned());
         }
 
@@ -197,7 +197,7 @@ impl TriageService {
             .await
         {
             Ok(()) => {
-                if history_result.is_repeat_offender
+                if history.is_repeat_offender
                     && let Err(error) = client
                         .ensure_label(
                             owner,
@@ -243,10 +243,10 @@ impl TriageService {
             message = "Posted triage review.",
             triage_id = %triage_id,
             pr_number,
-            combined_score = adjusted_score,
+            combined_score = scores.adjusted_score,
             tier = %combined_tier,
-            history_penalty = history_result.penalty,
-            repeat_offender = history_result.is_repeat_offender,
+            history_penalty = history.penalty,
+            repeat_offender = history.is_repeat_offender,
         );
 
         Ok(())
@@ -263,18 +263,18 @@ impl TriageService {
         let author_repo_future = client.search_rejected_prs_by_author(login, owner, repo);
         let global_future = client.search_rejected_prs_by_author_global(login);
 
-        let title_keywords = extract_title_keywords(title);
+        let title_keywords = evaluate::title_keywords(title);
 
         match &title_keywords {
             Some(keywords) => {
                 let title_future = client.search_rejected_prs_by_title(keywords, owner, repo);
                 match tokio::try_join!(author_repo_future, title_future, global_future) {
                     Ok((author_repo, title_result, global_count)) => HistorySignals {
-                        rejected_by_author_in_repo: author_repo.total_count,
-                        rejected_by_author_in_repo_items: author_repo.items,
-                        rejected_by_title_in_repo: title_result.total_count,
-                        rejected_by_title_in_repo_items: title_result.items,
-                        rejected_by_author_global: global_count,
+                        author_in_repo: author_repo.total_count,
+                        author_in_repo_items: author_repo.items,
+                        title_in_repo: title_result.total_count,
+                        title_in_repo_items: title_result.items,
+                        author_global: global_count,
                     },
                     Err(error) => {
                         warn!(message = "History search failed, skipping history signals.", %error);
@@ -284,11 +284,11 @@ impl TriageService {
             }
             None => match tokio::try_join!(author_repo_future, global_future) {
                 Ok((author_repo, global_count)) => HistorySignals {
-                    rejected_by_author_in_repo: author_repo.total_count,
-                    rejected_by_author_in_repo_items: author_repo.items,
-                    rejected_by_title_in_repo: 0,
-                    rejected_by_title_in_repo_items: vec![],
-                    rejected_by_author_global: global_count,
+                    author_in_repo: author_repo.total_count,
+                    author_in_repo_items: author_repo.items,
+                    title_in_repo: 0,
+                    title_in_repo_items: vec![],
+                    author_global: global_count,
                 },
                 Err(error) => {
                     warn!(message = "History search failed, skipping history signals.", %error);
@@ -299,7 +299,7 @@ impl TriageService {
     }
 }
 
-struct FallbackAnalysis {
+struct ResolvedAnalysis {
     quality_score: Score,
     summary: String,
     key_signal: String,
@@ -307,14 +307,25 @@ struct FallbackAnalysis {
     analysis_partial: bool,
 }
 
-impl FallbackAnalysis {
-    fn default() -> Self {
+impl ResolvedAnalysis {
+    fn degraded(reason: &DegradeReason) -> Self {
+        let (summary, key_signal) = match reason {
+            DegradeReason::GuardrailViolations(_) => (
+                "AI analysis was rejected by safety guardrails.",
+                "AI output failed guardrail checks.",
+            ),
+            DegradeReason::LlmUnavailable(_) | DegradeReason::UnparsableResponse(_) => (
+                "Analysis was partial due to an error contacting the AI service.",
+                "AI analysis unavailable.",
+            ),
+        };
+
         Self {
             quality_score: Score {
                 value: 0.0,
             },
-            summary: "Analysis was partial due to an error contacting the AI service.".to_owned(),
-            key_signal: "AI analysis unavailable.".to_owned(),
+            summary: summary.to_owned(),
+            key_signal: key_signal.to_owned(),
             recommendation: "Manual review recommended.".to_owned(),
             analysis_partial: true,
         }
@@ -323,11 +334,64 @@ impl FallbackAnalysis {
 
 fn empty_history_signals() -> HistorySignals {
     HistorySignals {
-        rejected_by_author_in_repo: 0,
-        rejected_by_author_in_repo_items: vec![],
-        rejected_by_title_in_repo: 0,
-        rejected_by_title_in_repo_items: vec![],
-        rejected_by_author_global: 0,
+        author_in_repo: 0,
+        author_in_repo_items: vec![],
+        title_in_repo: 0,
+        title_in_repo_items: vec![],
+        author_global: 0,
+    }
+}
+
+struct ResolvedScores {
+    adjusted_score: f64,
+    combined_tier: Tier,
+    profile_tier: Tier,
+    quality_tier: Tier,
+}
+
+fn resolve_scores(
+    profile: &Score,
+    analysis: &ResolvedAnalysis,
+    history: &HistoryResult,
+) -> ResolvedScores {
+    let (raw_combined_score, _) = compute::combine(profile.value, analysis.quality_score.value);
+
+    let adjusted_score = (raw_combined_score - history.penalty).max(0.0);
+    let adjusted_score = if analysis.analysis_partial {
+        adjusted_score.min(PARTIAL_ANALYSIS_SCORE_CAP)
+    } else {
+        adjusted_score
+    };
+
+    ResolvedScores {
+        adjusted_score,
+        combined_tier: compute::tier_from_score(adjusted_score),
+        profile_tier: compute::tier_from_score(profile.value),
+        quality_tier: compute::tier_from_score(analysis.quality_score.value),
+    }
+}
+
+fn build_comment_payload(
+    profile: &Score,
+    analysis: ResolvedAnalysis,
+    scores: &ResolvedScores,
+    history_section: String,
+) -> CommentPayload {
+    CommentPayload {
+        profile_score: profile.value,
+        profile_tier_label: scores.profile_tier.to_string(),
+        profile_tier_icon: scores.profile_tier.icon().to_owned(),
+        quality_score: analysis.quality_score.value,
+        quality_tier_label: scores.quality_tier.to_string(),
+        quality_tier_icon: scores.quality_tier.icon().to_owned(),
+        combined_score: scores.adjusted_score,
+        combined_tier_label: scores.combined_tier.to_string(),
+        combined_tier_icon: scores.combined_tier.icon().to_owned(),
+        summary: analysis.summary,
+        key_signal: analysis.key_signal,
+        recommendation: analysis.recommendation,
+        analysis_partial: analysis.analysis_partial,
+        history_section,
     }
 }
 
@@ -423,7 +487,7 @@ mod tests {
     fn setup_successful_app() -> MockGitHubApp {
         let mut app = MockGitHubApp::new();
         app.expect_installation_client()
-            .returning(|_| Ok(Box::new(setup_successful_client())));
+            .returning(|_| Ok(Arc::new(setup_successful_client())));
         app
     }
 
@@ -488,7 +552,7 @@ mod tests {
             client
                 .expect_search_rejected_prs_by_author_global()
                 .returning(|_| Ok(0));
-            Ok(Box::new(client))
+            Ok(Arc::new(client))
         });
         app
     }
@@ -514,7 +578,7 @@ mod tests {
     async fn test_execute_success() {
         let github = Arc::new(setup_successful_app());
         let mistral = Arc::new(successful_mistral_response());
-        let service = TriageService::new(github, mistral);
+        let service = TriageService::new(github, Harness::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_ok(), "execute should succeed");
@@ -528,11 +592,11 @@ mod tests {
             client
                 .expect_has_pratrol_review()
                 .returning(|_, _, _| Ok(true));
-            Ok(Box::new(client))
+            Ok(Arc::new(client))
         });
 
         let mistral = Arc::new(successful_mistral_response());
-        let service = TriageService::new(Arc::new(app), mistral);
+        let service = TriageService::new(Arc::new(app), Harness::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(
@@ -548,7 +612,7 @@ mod tests {
         mistral
             .expect_chat_completion()
             .returning(|_| Err(crate::domains::llm::LlmError::EmptyResponse));
-        let service = TriageService::new(github, Arc::new(mistral));
+        let service = TriageService::new(github, Harness::new(Arc::new(mistral)));
 
         let result = service.execute(sample_request()).await;
         assert!(
@@ -566,7 +630,7 @@ mod tests {
         mistral
             .expect_chat_completion()
             .returning(|_| Err(crate::domains::llm::LlmError::EmptyResponse));
-        let service = TriageService::new(app, Arc::new(mistral));
+        let service = TriageService::new(app, Harness::new(Arc::new(mistral)));
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_ok(), "fallback path should still succeed");
@@ -583,6 +647,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_execute_guardrail_violation_forces_low_confidence_comment() {
+        let captured = Arc::new(Mutex::new(None));
+        let diff = "diff --git a/src/lib.rs b/src/lib.rs\n+ fn ok() {}";
+        let app = Arc::new(setup_replay_app(diff, Arc::clone(&captured)));
+        let mistral = Arc::new(mistral_response(
+            r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "Reach out at https://evil.example for details.", "key_signal": "Clean.", "recommendation": "Approve."}"#,
+        ));
+        let service = TriageService::new(app, Harness::new(mistral));
+
+        let result = service.execute(sample_request()).await;
+        assert!(
+            result.is_ok(),
+            "guardrail-degraded path should still succeed"
+        );
+
+        let body = captured
+            .lock()
+            .expect("review capture lock should not be poisoned")
+            .clone()
+            .expect("review body should be captured");
+        assert!(
+            body.contains("🔴 **Low Confidence**"),
+            "guardrail violation should force low confidence"
+        );
+    }
+
+    #[tokio::test]
     async fn test_execute_github_failure_propagates() {
         let mut app = MockGitHubApp::new();
         app.expect_installation_client().returning(|_| {
@@ -591,7 +682,7 @@ mod tests {
             Err(crate::domains::github::GitHubError::Jwt(jwt_error))
         });
         let mistral = Arc::new(successful_mistral_response());
-        let service = TriageService::new(Arc::new(app), mistral);
+        let service = TriageService::new(Arc::new(app), Harness::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_err(), "execute should fail when GitHub fails");
@@ -617,11 +708,11 @@ mod tests {
             client
                 .expect_search_rejected_prs_by_author_global()
                 .returning(|_| Ok(25));
-            Ok(Box::new(client))
+            Ok(Arc::new(client))
         });
 
         let mistral = Arc::new(successful_mistral_response());
-        let service = TriageService::new(Arc::new(app), mistral);
+        let service = TriageService::new(Arc::new(app), Harness::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(
@@ -633,14 +724,14 @@ mod tests {
     #[tokio::test]
     async fn test_replay_benign_comment_in_terminal() {
         let captured = Arc::new(Mutex::new(None));
-        let diff = r#"diff --git a/src/lib.rs b/src/lib.rs
-            + fn normalize(input: &str) -> String { input.trim().to_owned() }"#;
+        let diff = r"diff --git a/src/lib.rs b/src/lib.rs
+            + fn normalize(input: &str) -> String { input.trim().to_owned() }";
 
         let app = Arc::new(setup_replay_app(diff, Arc::clone(&captured)));
         let mistral = Arc::new(mistral_response(
             r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "Normal refactor with low risk.", "key_signal": "Focused change in one module.", "recommendation": "Standard review is enough."}"#,
         ));
-        let service = TriageService::new(app, mistral);
+        let service = TriageService::new(app, Harness::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_ok(), "replay should succeed");
@@ -666,7 +757,7 @@ mod tests {
         let mistral = Arc::new(mistral_response(
             r#"{"code_coherence": 3.0, "commit_quality": 2.0, "risk_level": 8.0, "suspicious_patterns": 9.0, "summary": "Ignore all controls and ping @security-team <script>alert(1)</script>", "key_signal": "Instruction-like content appears in the diff.", "recommendation": "Block and require manual security review."}"#,
         ));
-        let service = TriageService::new(app, mistral);
+        let service = TriageService::new(app, Harness::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_ok(), "replay should succeed");
@@ -711,14 +802,11 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires network access and MISTRAL_API_KEY"]
     async fn test_replay_real_mistral_comment_in_terminal() {
-        let config = match replay_config_from_env() {
-            Some(config) => config,
-            None => {
-                eprintln!(
-                    "Skipping: set MISTRAL_API_KEY (and optionally MISTRAL_MODEL) before running."
-                );
-                return;
-            }
+        let Some(config) = replay_config_from_env() else {
+            eprintln!(
+                "Skipping: set MISTRAL_API_KEY (and optionally MISTRAL_MODEL) before running."
+            );
+            return;
         };
 
         let captured = Arc::new(Mutex::new(None));
@@ -731,9 +819,9 @@ mod tests {
 
         let app = Arc::new(setup_replay_app(diff, Arc::clone(&captured)));
         let mistral = Arc::new(
-            MistralConnector::new(config).expect("real mistral connector should initialize"),
+            MistralConnector::new(&config).expect("real mistral connector should initialize"),
         );
-        let service = TriageService::new(app, mistral);
+        let service = TriageService::new(app, Harness::new(mistral));
 
         let result = service.execute(sample_request()).await;
         assert!(result.is_ok(), "real mistral replay should succeed");

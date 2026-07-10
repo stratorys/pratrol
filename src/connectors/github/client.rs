@@ -21,14 +21,12 @@ const MAX_REVIEW_PAGES: u32 = 3;
 
 #[derive(Deserialize)]
 struct PublicEvent {
-    #[allow(dead_code)]
-    id: String,
+    _id: String,
 }
 
 #[derive(Deserialize)]
 struct OrgItem {
-    #[allow(dead_code)]
-    login: String,
+    _login: String,
 }
 
 #[async_trait]
@@ -39,7 +37,8 @@ impl GitHubClient for InstalledClient {
     ) -> Result<UserInfo, GitHubError> {
         let profile = self.octocrab.users(login).profile().await?;
 
-        let age_days = (Utc::now() - profile.created_at).num_days().max(0) as u32;
+        let age_days =
+            u32::try_from((Utc::now() - profile.created_at).num_days().max(0)).unwrap_or(u32::MAX);
 
         let public_repos = u32::try_from(profile.public_repos).unwrap_or(u32::MAX);
         let followers = u32::try_from(profile.followers).unwrap_or(u32::MAX);
@@ -56,7 +55,7 @@ impl GitHubClient for InstalledClient {
         login: &str,
     ) -> Result<u32, GitHubError> {
         let page = self.get_user_public_events(login).await?;
-        let items_len = page.items.len() as u32;
+        let items_len = u32::try_from(page.items.len()).unwrap_or(u32::MAX);
         let total = match page.number_of_pages() {
             Some(n) if n > 1 => (n - 1) * 100 + items_len,
             _ => items_len,
@@ -69,7 +68,7 @@ impl GitHubClient for InstalledClient {
         login: &str,
     ) -> Result<u32, GitHubError> {
         let orgs = self.get_user_orgs(login).await?;
-        Ok(orgs.len() as u32)
+        Ok(u32::try_from(orgs.len()).unwrap_or(u32::MAX))
     }
 
     async fn fetch_merged_prs(
