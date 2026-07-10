@@ -115,7 +115,6 @@ pub trait GitHubClient: Send + Sync {
     ) -> Result<u32, GitHubError>;
 }
 
-/// Pull-request reads required by application workflows.
 #[async_trait]
 pub trait PullRequestReader: Send + Sync {
     async fn has_pratrol_review(
@@ -140,7 +139,6 @@ pub trait PullRequestReader: Send + Sync {
     ) -> Result<Vec<CommitInfo>, GitHubError>;
 }
 
-/// Contributor reads required by profile assessment.
 #[async_trait]
 pub trait ContributorReader: Send + Sync {
     async fn fetch_user(
@@ -167,7 +165,6 @@ pub trait ContributorReader: Send + Sync {
     ) -> Result<u32, GitHubError>;
 }
 
-/// Rejected-contribution history reads.
 #[async_trait]
 pub trait HistoryReader: Send + Sync {
     async fn search_rejected_prs_by_author(
@@ -190,7 +187,6 @@ pub trait HistoryReader: Send + Sync {
     ) -> Result<u32, GitHubError>;
 }
 
-/// Review publication capability.
 #[async_trait]
 pub trait ReviewPublisher: Send + Sync {
     async fn post_review(
@@ -203,7 +199,6 @@ pub trait ReviewPublisher: Send + Sync {
     ) -> Result<(), GitHubError>;
 }
 
-/// Label management capability.
 #[async_trait]
 pub trait LabelManager: Send + Sync {
     async fn ensure_label(

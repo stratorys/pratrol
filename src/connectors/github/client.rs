@@ -14,6 +14,7 @@ use crate::domains::github::entity::{
 };
 use crate::domains::github::error::GitHubError;
 use crate::domains::github::traits::GitHubClient;
+use crate::sanitize::text::truncate_chars;
 
 const DIFF_MAX_CHARS: usize = 30_000;
 const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
@@ -440,11 +441,4 @@ async fn create_label(
             Err(GitHubError::Api)
         }
     }
-}
-
-fn truncate_chars(
-    input: &str,
-    max_chars: usize,
-) -> String {
-    input.chars().take(max_chars).collect()
 }

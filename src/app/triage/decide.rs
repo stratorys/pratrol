@@ -16,6 +16,7 @@ const PARTIAL_ANALYSIS_SCORE_CAP: f64 = 39.0;
 
 pub struct Decision {
     pub adjusted_score: f64,
+    pub profile_score: f64,
     pub combined_tier: Tier,
     pub profile_tier: Tier,
     pub quality_tier: Tier,
@@ -32,7 +33,10 @@ pub fn triage(
     assessment: Assessment,
 ) -> Decision {
     let profile_score = compute::profile_score(&context.profile);
-    let history = evaluate::history(&context.history, context.request.pr_number);
+    let history = match &context.history {
+        Some(signals) => evaluate::history(signals, context.request.pr_number),
+        None => evaluate::unavailable(),
+    };
     let (raw_score, _) = compute::combine(profile_score.value, assessment.quality_score.value);
 
     let adjusted_score = (raw_score - history.penalty).max(0.0);
@@ -44,6 +48,7 @@ pub fn triage(
 
     Decision {
         adjusted_score,
+        profile_score: profile_score.value,
         combined_tier: compute::tier_from_score(adjusted_score),
         profile_tier: compute::tier_from_score(profile_score.value),
         quality_tier: compute::tier_from_score(assessment.quality_score.value),
@@ -61,9 +66,8 @@ pub fn review(
     decision: &Decision,
 ) -> Result<Publication, TriageError> {
     let head_commit = context.commits.last().ok_or(TriageError::NoCommits)?;
-    let profile_score = compute::profile_score(&context.profile);
     let payload = CommentPayload {
-        profile_score: profile_score.value,
+        profile_score: decision.profile_score,
         profile_tier_label: decision.profile_tier.to_string(),
         profile_tier_icon: decision.profile_tier.icon().to_owned(),
         quality_score: decision.quality_score.value,

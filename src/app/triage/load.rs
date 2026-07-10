@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use tracing::info;
+use tracing::{
+    info,
+    warn,
+};
 
 use crate::domains::github::entity::CommitInfo;
 use crate::domains::github::error::GitHubError;
@@ -23,7 +26,7 @@ pub struct Context {
     pub profile: ProfileSignals,
     pub diff: String,
     pub commits: Vec<CommitInfo>,
-    pub history: HistorySignals,
+    pub history: Option<HistorySignals>,
 }
 
 pub async fn context(
@@ -61,7 +64,18 @@ pub async fn context(
         PullRequestReader::fetch_commits(&*client, owner, repo, request.pr_number),
     )?;
 
-    let history = history(client.as_ref(), login, owner, repo, &request.title).await?;
+    let history = match history(client.as_ref(), login, owner, repo, &request.title).await {
+        Ok(signals) => Some(signals),
+        Err(error) => {
+            warn!(
+                message = "History search failed, skipping history signals.",
+                %error,
+                triage_id = %request.id,
+                pr_number = request.pr_number,
+            );
+            None
+        }
+    };
 
     Ok(Some(Context {
         request,

@@ -29,7 +29,7 @@ const MARKDOWN_TEXT_LIMIT: usize = 200;
 /// 4. Neutralize `@mentions` with a zero-width space.
 pub fn sanitize_plain_text(input: &str) -> String {
     let collapsed = collapse_whitespace(input);
-    let truncated = truncate_chars(&collapsed, PLAIN_TEXT_LIMIT);
+    let truncated = truncate_chars_ellipsis(&collapsed, PLAIN_TEXT_LIMIT);
     let escaped = escape(&truncated, Html).to_string();
 
     neutralize_mentions(&escaped)
@@ -47,7 +47,7 @@ pub fn sanitize_plain_text(input: &str) -> String {
 /// 5. Neutralize `@mentions` with a zero-width space.
 pub fn sanitize_markdown_text(input: &str) -> String {
     let collapsed = collapse_whitespace(input);
-    let truncated = truncate_chars(&collapsed, MARKDOWN_TEXT_LIMIT);
+    let truncated = truncate_chars_ellipsis(&collapsed, MARKDOWN_TEXT_LIMIT);
 
     let cleaned = ammonia::Builder::new()
         .tags(std::collections::HashSet::new())
@@ -76,16 +76,23 @@ fn collapse_whitespace(input: &str) -> String {
     input.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Unicode-aware truncation to `max_chars` characters, appending `…` if
-/// truncated.
-fn truncate_chars(
+pub fn truncate_chars(
     input: &str,
     max_chars: usize,
 ) -> String {
-    let output = input.chars().take(max_chars).collect::<String>();
-    let truncated = input.chars().count() > max_chars;
+    input.chars().take(max_chars).collect()
+}
 
-    if truncated {
+/// Unicode-aware truncation to `max_chars` characters, appending `…` if
+/// truncated.
+fn truncate_chars_ellipsis(
+    input: &str,
+    max_chars: usize,
+) -> String {
+    let mut chars = input.chars();
+    let output: String = chars.by_ref().take(max_chars).collect();
+
+    if chars.next().is_some() {
         format!("{output}…")
     } else {
         output

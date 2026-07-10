@@ -28,6 +28,11 @@ const STOP_WORDS: &[&str] = &[
 const MIN_KEYWORD_LEN: usize = 3;
 const TARGET_KEYWORDS: usize = 3;
 
+const UNAVAILABLE_SECTION: &str = "\n\n---\n\n### Prior History\n\n> **\u{26a0}\u{fe0f} History \
+                                   Unavailable:** GitHub search could not be reached, so the \
+                                   author's past contributions were not factored into this \
+                                   review.\n";
+
 pub fn history(
     signals: &HistorySignals,
     current_pr_number: u64,
@@ -50,6 +55,14 @@ pub fn history(
         penalty,
         is_repeat_offender,
         history_section,
+    }
+}
+
+pub fn unavailable() -> HistoryResult {
+    HistoryResult {
+        penalty: 0.0,
+        is_repeat_offender: false,
+        history_section: UNAVAILABLE_SECTION.to_owned(),
     }
 }
 
@@ -177,6 +190,21 @@ mod tests {
         assert!(
             result.history_section.is_empty(),
             "history section should be empty"
+        );
+    }
+
+    #[test]
+    fn test_unavailable_history_has_no_penalty_and_notes_it() {
+        let result = unavailable();
+        assert!(
+            (result.penalty - 0.0).abs() < f64::EPSILON,
+            "penalty should be zero"
+        );
+        assert!(!result.is_repeat_offender, "should not be repeat offender");
+        assert!(
+            result.history_section.contains("History Unavailable"),
+            "section should state history is unavailable: {}",
+            result.history_section
         );
     }
 
