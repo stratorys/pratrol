@@ -15,10 +15,7 @@ pub enum ApiError {
     #[error("invalid webhook payload")]
     InvalidPayload,
 
-    #[error(transparent)]
-    PayloadParse(#[from] serde_json::Error),
-
-    #[error(transparent)]
+    #[error("triage failed")]
     Triage(#[from] TriageError),
 }
 
@@ -28,7 +25,7 @@ impl IntoResponse for ApiError {
 
         let status = match &self {
             ApiError::InvalidSignature => StatusCode::UNAUTHORIZED,
-            ApiError::InvalidPayload | ApiError::PayloadParse(_) => StatusCode::BAD_REQUEST,
+            ApiError::InvalidPayload => StatusCode::BAD_REQUEST,
             ApiError::Triage(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 

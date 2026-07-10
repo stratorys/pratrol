@@ -2,22 +2,41 @@
 /// comments.
 ///
 /// Two levels of sanitization:
-/// - `sanitize_plain_text`: for AI-generated fields (summary, key_signal,
-///   recommendation) that are placed inside pre-defined Markdown structures.
+/// - `sanitize_plain_text`: for AI-generated fields (summary, `key_signal`,
+///   `recommendation`) that are placed inside pre-defined Markdown structures.
 ///   HTML-escapes via `askama_escape` and neutralizes `@mentions`.
 /// - `sanitize_markdown_text`: for external content (PR titles) that may
 ///   contain attacker-crafted Markdown. Uses `ammonia` to strip all
 ///   HTML/Markdown structure, then neutralizes `@mentions`.
+use std::fmt;
+
 use askama_escape::{
     Html,
     escape,
 };
 
-/// Maximum character length for AI-generated text fields.
-const PLAIN_TEXT_LIMIT: usize = 300;
+use super::constants::{
+    MARKDOWN_TEXT_LIMIT,
+    PLAIN_TEXT_LIMIT,
+};
 
-/// Maximum character length for external Markdown fields (PR titles).
-const MARKDOWN_TEXT_LIMIT: usize = 200;
+#[derive(Debug, Clone)]
+pub struct SanitizedText(String);
+
+impl std::ops::Deref for SanitizedText {
+    type Target = str;
+
+    fn deref(&self) -> &str { &self.0 }
+}
+
+impl fmt::Display for SanitizedText {
+    fn fmt(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+    ) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// Sanitize an AI-generated plain-text field for safe embedding in a Markdown
 /// comment.
@@ -27,12 +46,12 @@ const MARKDOWN_TEXT_LIMIT: usize = 200;
 /// 2. Truncate to `PLAIN_TEXT_LIMIT` characters.
 /// 3. HTML-entity-escape via `askama_escape` (`&`, `<`, `>`, `"`, `'`).
 /// 4. Neutralize `@mentions` with a zero-width space.
-pub fn sanitize_plain_text(input: &str) -> String {
+pub fn sanitize_plain_text(input: &str) -> SanitizedText {
     let collapsed = collapse_whitespace(input);
-    let truncated = truncate_chars(&collapsed, PLAIN_TEXT_LIMIT);
+    let truncated = truncate_chars_ellipsis(&collapsed, PLAIN_TEXT_LIMIT);
     let escaped = escape(&truncated, Html).to_string();
 
-    neutralize_mentions(&escaped)
+    SanitizedText(neutralize_mentions(&escaped))
 }
 
 /// Sanitize untrusted Markdown/HTML content (e.g. external PR titles) to plain
@@ -45,9 +64,9 @@ pub fn sanitize_plain_text(input: &str) -> String {
 /// 4. Escape Markdown link syntax (`[`, `]`, `(`, `)`) to prevent link
 ///    injection.
 /// 5. Neutralize `@mentions` with a zero-width space.
-pub fn sanitize_markdown_text(input: &str) -> String {
+pub fn sanitize_markdown_text(input: &str) -> SanitizedText {
     let collapsed = collapse_whitespace(input);
-    let truncated = truncate_chars(&collapsed, MARKDOWN_TEXT_LIMIT);
+    let truncated = truncate_chars_ellipsis(&collapsed, MARKDOWN_TEXT_LIMIT);
 
     let cleaned = ammonia::Builder::new()
         .tags(std::collections::HashSet::new())
@@ -55,7 +74,7 @@ pub fn sanitize_markdown_text(input: &str) -> String {
         .to_string();
 
     let escaped = escape_markdown_links(&cleaned);
-    neutralize_mentions(&escaped)
+    SanitizedText(neutralize_mentions(&escaped))
 }
 
 /// Escape Markdown link syntax characters to prevent injection of clickable
@@ -76,21 +95,27 @@ fn collapse_whitespace(input: &str) -> String {
     input.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Unicode-aware truncation to `max_chars` characters, appending `…` if
-/// truncated.
-fn truncate_chars(
+pub fn truncate_chars(
     input: &str,
     max_chars: usize,
 ) -> String {
-    let mut output = String::with_capacity(input.len().min(max_chars.saturating_mul(4)));
-    for (idx, ch) in input.chars().enumerate() {
-        if idx == max_chars {
-            output.push('…');
-            return output;
-        }
-        output.push(ch);
+    input.chars().take(max_chars).collect()
+}
+
+/// Unicode-aware truncation to `max_chars` characters, appending `…` if
+/// truncated.
+fn truncate_chars_ellipsis(
+    input: &str,
+    max_chars: usize,
+) -> String {
+    let mut chars = input.chars();
+    let output: String = chars.by_ref().take(max_chars).collect();
+
+    if chars.next().is_some() {
+        format!("{output}…")
+    } else {
+        output
     }
-    output
 }
 
 #[cfg(test)]

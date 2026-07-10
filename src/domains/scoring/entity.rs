@@ -1,7 +1,12 @@
 use std::fmt;
 
-pub struct Score {
-    pub value: f64,
+#[derive(Debug, Clone, Copy)]
+pub struct Score(f64);
+
+impl Score {
+    pub fn new(value: f64) -> Self { Self(value.clamp(0.0, 100.0)) }
+
+    pub fn value(self) -> f64 { self.0 }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -25,7 +30,7 @@ impl fmt::Display for Tier {
 }
 
 impl Tier {
-    pub fn icon(&self) -> &'static str {
+    pub fn icon(self) -> &'static str {
         match self {
             Tier::High => "+",
             Tier::Medium => "~",
@@ -33,15 +38,15 @@ impl Tier {
         }
     }
 
-    pub fn label(&self) -> &'static str {
+    pub fn label(self) -> &'static str {
         match self {
-            Tier::High => "patrol:trusted",
-            Tier::Medium => "patrol:suspicious",
-            Tier::Low => "patrol:spam",
+            Tier::High => "pratrol:trusted",
+            Tier::Medium => "pratrol:suspicious",
+            Tier::Low => "pratrol:spam",
         }
     }
 
-    pub fn label_color(&self) -> &'static str {
+    pub fn label_color(self) -> &'static str {
         match self {
             Tier::High => "0e8a16",
             Tier::Medium => "e4a012",
@@ -49,7 +54,7 @@ impl Tier {
         }
     }
 
-    pub fn label_description(&self) -> &'static str {
+    pub fn label_description(self) -> &'static str {
         match self {
             Tier::High => "PR author and content look trustworthy",
             Tier::Medium => "PR has some suspicious signals and needs careful review",

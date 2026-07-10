@@ -1,10 +1,10 @@
-use crate::ports::github::GitHubError;
+use crate::domains::github::error::GitHubError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TriageError {
-    #[error(transparent)]
+    #[error("github operation failed")]
     GitHub(#[from] GitHubError),
 
-    #[error("pull request has no commits")]
-    NoCommits,
+    #[error("failed to render triage comment")]
+    Render(#[from] askama::Error),
 }

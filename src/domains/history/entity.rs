@@ -1,15 +1,32 @@
-use crate::ports::github::RejectedPrInfo;
+use crate::domains::github::entity::RejectedPrInfo;
 
 pub struct HistorySignals {
-    pub rejected_by_author_in_repo: u32,
-    pub rejected_by_author_in_repo_items: Vec<RejectedPrInfo>,
-    pub rejected_by_title_in_repo: u32,
-    pub rejected_by_title_in_repo_items: Vec<RejectedPrInfo>,
-    pub rejected_by_author_global: u32,
+    pub author_in_repo: u32,
+    pub author_in_repo_items: Vec<RejectedPrInfo>,
+    pub title_in_repo: u32,
+    pub title_in_repo_items: Vec<RejectedPrInfo>,
+    pub author_global: u32,
 }
 
 pub struct HistoryResult {
     pub penalty: f64,
     pub is_repeat_offender: bool,
-    pub history_section: String,
+    pub presentation: HistoryPresentation,
+}
+
+#[derive(Clone)]
+pub enum HistoryPresentation {
+    Unavailable,
+    Available(HistoryDetails),
+}
+
+#[derive(Clone)]
+pub struct HistoryDetails {
+    pub author_in_repo: u32,
+    pub author_in_repo_items: Vec<RejectedPrInfo>,
+    pub title_in_repo: u32,
+    pub title_in_repo_items: Vec<RejectedPrInfo>,
+    pub author_global: u32,
+    pub is_repeat_offender: bool,
+    pub current_pr_number: u64,
 }

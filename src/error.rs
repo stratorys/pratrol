@@ -1,18 +1,18 @@
 use crate::config::ConfigError;
-use crate::ports::github::GitHubError;
-use crate::ports::mistral::MistralError;
+use crate::domains::github::error::GitHubError;
+use crate::domains::llm::error::LlmError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error(transparent)]
+    #[error("configuration loading failed")]
     Config(#[from] ConfigError),
 
-    #[error(transparent)]
+    #[error("github connector initialization failed")]
     GitHub(#[from] GitHubError),
 
-    #[error(transparent)]
-    Mistral(#[from] MistralError),
+    #[error("llm connector initialization failed")]
+    Llm(#[from] LlmError),
 
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
+    #[error("server io failure")]
+    Io,
 }

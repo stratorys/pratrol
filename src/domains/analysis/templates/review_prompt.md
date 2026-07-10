@@ -30,12 +30,12 @@ Respond in this exact JSON format:
 
 ## Diff
 
---- {{sentinel_diff}} BEGIN UNTRUSTED DIFF ---
-{{diff}}
---- {{sentinel_diff}} END UNTRUSTED DIFF ---
+--- {{ sentinel_diff }} BEGIN UNTRUSTED DIFF ---
+{{ diff }}
+--- {{ sentinel_diff }} END UNTRUSTED DIFF ---
 
 ## Commit messages
 
---- {{sentinel_commits}} BEGIN UNTRUSTED COMMITS ---
-{{commits}}
---- {{sentinel_commits}} END UNTRUSTED COMMITS ---
+--- {{ sentinel_commits }} BEGIN UNTRUSTED COMMITS ---
+{{ commits }}
+--- {{ sentinel_commits }} END UNTRUSTED COMMITS ---

@@ -3,33 +3,29 @@ use chrono::Utc;
 use octocrab::Page;
 use octocrab::models::pulls::ReviewAction;
 use serde::Deserialize;
+use tracing::error;
 
-use super::InstalledClient;
-use crate::ports::github::{
+use super::connector::InstalledClient;
+use super::constants::{
+    COMMIT_MESSAGE_MAX_CHARS,
+    MAX_REVIEW_PAGES,
+    PER_PAGE,
+};
+use crate::domains::github::entity::{
     CommitInfo,
-    GitHubClient,
-    GitHubError,
     RejectedPrInfo,
     RejectedPrSearchResult,
     UserInfo,
 };
-
-const DIFF_MAX_CHARS: usize = 30_000;
-const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
-
-const MAX_REVIEW_PAGES: u32 = 3;
+use crate::domains::github::error::GitHubError;
+use crate::domains::github::traits::GitHubClient;
+use crate::sanitize::text::truncate_chars;
 
 #[derive(Deserialize)]
-struct PublicEvent {
-    #[allow(dead_code)]
-    id: String,
-}
+struct PublicEvent {}
 
 #[derive(Deserialize)]
-struct OrgItem {
-    #[allow(dead_code)]
-    login: String,
-}
+struct OrgItem {}
 
 #[async_trait]
 impl GitHubClient for InstalledClient {
@@ -37,12 +33,23 @@ impl GitHubClient for InstalledClient {
         &self,
         login: &str,
     ) -> Result<UserInfo, GitHubError> {
-        let profile = self.octocrab.users(login).profile().await?;
+        let profile = self
+            .octocrab
+            .users(login)
+            .profile()
+            .await
+            .map_err(|error| {
+                error!(message = "Failed to fetch user profile.", %error, login);
+                GitHubError::Api
+            })?;
 
-        let age_days = (Utc::now() - profile.created_at).num_days().max(0) as u32;
+        let age_days = u32::try_from((Utc::now() - profile.created_at).num_days().max(0))
+            .map_err(|_| GitHubError::InvalidResponse)?;
 
-        let public_repos = u32::try_from(profile.public_repos).unwrap_or(u32::MAX);
-        let followers = u32::try_from(profile.followers).unwrap_or(u32::MAX);
+        let public_repos =
+            u32::try_from(profile.public_repos).map_err(|_| GitHubError::InvalidResponse)?;
+        let followers =
+            u32::try_from(profile.followers).map_err(|_| GitHubError::InvalidResponse)?;
 
         Ok(UserInfo {
             account_age_days: age_days,
@@ -55,10 +62,14 @@ impl GitHubClient for InstalledClient {
         &self,
         login: &str,
     ) -> Result<u32, GitHubError> {
-        let page = self.get_user_public_events(login).await?;
-        let items_len = page.items.len() as u32;
+        let page = self.get_user_public_events(login).await.map_err(|error| {
+            error!(message = "Failed to fetch user public events.", %error, login);
+            GitHubError::Api
+        })?;
+        let items_len =
+            u32::try_from(page.items.len()).map_err(|_| GitHubError::InvalidResponse)?;
         let total = match page.number_of_pages() {
-            Some(n) if n > 1 => (n - 1) * 100 + items_len,
+            Some(n) if n > 1 => (n - 1) * u32::from(PER_PAGE) + items_len,
             _ => items_len,
         };
         Ok(total)
@@ -68,8 +79,11 @@ impl GitHubClient for InstalledClient {
         &self,
         login: &str,
     ) -> Result<u32, GitHubError> {
-        let orgs = self.get_user_orgs(login).await?;
-        Ok(orgs.len() as u32)
+        let orgs = self.get_user_orgs(login).await.map_err(|error| {
+            error!(message = "Failed to fetch user organizations.", %error, login);
+            GitHubError::Api
+        })?;
+        u32::try_from(orgs.len()).map_err(|_| GitHubError::InvalidResponse)
     }
 
     async fn fetch_merged_prs(
@@ -96,11 +110,21 @@ impl GitHubClient for InstalledClient {
         repo: &str,
         pr_number: u64,
     ) -> Result<String, GitHubError> {
-        let mut diff = self.octocrab.pulls(owner, repo).get_diff(pr_number).await?;
-
-        if diff.len() > DIFF_MAX_CHARS {
-            diff.truncate(DIFF_MAX_CHARS);
-        }
+        let diff = self
+            .octocrab
+            .pulls(owner, repo)
+            .get_diff(pr_number)
+            .await
+            .map_err(|error| {
+                error!(
+                    message = "Failed to fetch pull request diff.",
+                    %error,
+                    owner,
+                    repo,
+                    pr_number,
+                );
+                GitHubError::Api
+            })?;
 
         Ok(diff)
     }
@@ -115,22 +139,25 @@ impl GitHubClient for InstalledClient {
             .octocrab
             .pulls(owner, repo)
             .pr_commits(pr_number)
-            .per_page(100)
+            .per_page(PER_PAGE)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                error!(
+                    message = "Failed to fetch pull request commits.",
+                    %error,
+                    owner,
+                    repo,
+                    pr_number,
+                );
+                GitHubError::Api
+            })?;
 
         let commits: Vec<CommitInfo> = page
             .items
             .into_iter()
-            .map(|repo_commit| {
-                let mut message = repo_commit.commit.message;
-                if message.len() > COMMIT_MESSAGE_MAX_CHARS {
-                    message.truncate(COMMIT_MESSAGE_MAX_CHARS);
-                }
-                CommitInfo {
-                    sha: repo_commit.sha,
-                    message,
-                }
+            .map(|repo_commit| CommitInfo {
+                message: truncate_chars(&repo_commit.commit.message, COMMIT_MESSAGE_MAX_CHARS),
             })
             .collect();
 
@@ -143,19 +170,26 @@ impl GitHubClient for InstalledClient {
         repo: &str,
         pr_number: u64,
     ) -> Result<bool, GitHubError> {
-        // The Reviews API returns results in chronological order with no sort
-        // option. Scan up to MAX_REVIEW_PAGES pages; if we still haven't found
-        // our review by then, allow a fresh triage — a PR with that many
-        // reviews deserves an updated score anyway.
         for page_number in 1..=MAX_REVIEW_PAGES {
             let page = self
                 .octocrab
                 .pulls(owner, repo)
                 .list_reviews(pr_number)
-                .per_page(100)
+                .per_page(PER_PAGE)
                 .page(page_number)
                 .send()
-                .await?;
+                .await
+                .map_err(|error| {
+                    error!(
+                        message = "Failed to list pull request reviews.",
+                        %error,
+                        owner,
+                        repo,
+                        pr_number,
+                        page_number,
+                    );
+                    GitHubError::Api
+                })?;
             if page
                 .items
                 .iter()
@@ -163,7 +197,7 @@ impl GitHubClient for InstalledClient {
             {
                 return Ok(true);
             }
-            if page.items.len() < 100 {
+            if page.items.len() < usize::from(PER_PAGE) {
                 return Ok(false);
             }
         }
@@ -187,7 +221,17 @@ impl GitHubClient for InstalledClient {
             .pull_number(pr_number)
             .reviews()
             .create_review(commit_sha, body, ReviewAction::Comment, vec![])
-            .await?;
+            .await
+            .map_err(|error| {
+                error!(
+                    message = "Failed to post review.",
+                    %error,
+                    owner,
+                    repo,
+                    pr_number,
+                );
+                GitHubError::Api
+            })?;
 
         Ok(())
     }
@@ -202,7 +246,17 @@ impl GitHubClient for InstalledClient {
         self.octocrab
             .issues(owner, repo)
             .add_labels(pr_number, &labels)
-            .await?;
+            .await
+            .map_err(|error| {
+                error!(
+                    message = "Failed to add labels.",
+                    %error,
+                    owner,
+                    repo,
+                    pr_number,
+                );
+                GitHubError::Api
+            })?;
 
         Ok(())
     }
@@ -222,21 +276,18 @@ impl GitHubClient for InstalledClient {
             Err(octocrab::Error::GitHub {
                 ref source, ..
             }) if source.status_code == http::StatusCode::NOT_FOUND => {
-                let create_result = self
-                    .octocrab
-                    .issues(owner, repo)
-                    .create_label(&name, &color, &description)
-                    .await;
-
-                match create_result {
-                    Ok(_) => Ok(()),
-                    Err(octocrab::Error::GitHub {
-                        ref source, ..
-                    }) if source.status_code == http::StatusCode::UNPROCESSABLE_ENTITY => Ok(()),
-                    Err(error) => Err(GitHubError::Api(error)),
-                }
+                create_label(self, owner, repo, &name, &color, &description).await
             }
-            Err(error) => Err(GitHubError::Api(error)),
+            Err(error) => {
+                error!(
+                    message = "Failed to fetch label.",
+                    %error,
+                    owner,
+                    repo,
+                    label = %name,
+                );
+                Err(GitHubError::Api)
+            }
         }
     }
 
@@ -275,10 +326,11 @@ impl InstalledClient {
         &self,
         login: &str,
     ) -> Result<Page<PublicEvent>, octocrab::Error> {
+        let per_page = PER_PAGE.to_string();
         self.octocrab
             .get(
                 format!("/users/{login}/events/public"),
-                Some(&[("per_page", "100")]),
+                Some(&[("per_page", per_page.as_str())]),
             )
             .await
     }
@@ -288,8 +340,12 @@ impl InstalledClient {
         &self,
         login: &str,
     ) -> Result<Vec<OrgItem>, octocrab::Error> {
+        let per_page = PER_PAGE.to_string();
         self.octocrab
-            .get(format!("/users/{login}/orgs"), Some(&[("per_page", "100")]))
+            .get(
+                format!("/users/{login}/orgs"),
+                Some(&[("per_page", per_page.as_str())]),
+            )
             .await
     }
 
@@ -299,15 +355,23 @@ impl InstalledClient {
     ) -> Result<RejectedPrSearchResult, GitHubError> {
         const MAX_RESULTS: usize = 5;
 
+        let page_size = u8::try_from(MAX_RESULTS).map_err(|_| GitHubError::InvalidResponse)?;
         let page = self
             .octocrab
             .search()
             .issues_and_pull_requests(query)
-            .per_page(u8::try_from(MAX_RESULTS).unwrap_or(u8::MAX))
+            .per_page(page_size)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                error!(message = "Failed to search rejected pull requests.", %error, query);
+                GitHubError::Api
+            })?;
 
-        let total_count = u32::try_from(page.total_count.unwrap_or(0)).unwrap_or(u32::MAX);
+        let total_count = page
+            .total_count
+            .ok_or(GitHubError::InvalidResponse)
+            .and_then(|count| u32::try_from(count).map_err(|_| GitHubError::InvalidResponse))?;
 
         let items: Vec<RejectedPrInfo> = page
             .items
@@ -336,11 +400,74 @@ impl InstalledClient {
             .issues_and_pull_requests(query)
             .per_page(1)
             .send()
-            .await?;
+            .await
+            .map_err(|error| {
+                error!(message = "Failed to search issues count.", %error, query);
+                GitHubError::Api
+            })?;
 
-        let count = page.total_count.unwrap_or(0);
-        let count_u32 = u32::try_from(count).unwrap_or(u32::MAX);
+        let count = page.total_count.ok_or(GitHubError::InvalidResponse)?;
+        u32::try_from(count).map_err(|_| GitHubError::InvalidResponse)
+    }
+}
 
-        Ok(count_u32)
+async fn create_label(
+    client: &InstalledClient,
+    owner: &str,
+    repo: &str,
+    name: &str,
+    color: &str,
+    description: &str,
+) -> Result<(), GitHubError> {
+    let result = client
+        .octocrab
+        .issues(owner, repo)
+        .create_label(name, color, description)
+        .await;
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(octocrab::Error::GitHub {
+            ref source, ..
+        }) if source.status_code == http::StatusCode::UNPROCESSABLE_ENTITY => Ok(()),
+        Err(error) => {
+            error!(
+                message = "Failed to create label.",
+                %error,
+                owner,
+                repo,
+                label = %name,
+            );
+            Err(GitHubError::Api)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        OrgItem,
+        PublicEvent,
+    };
+
+    #[test]
+    fn test_public_events_deserialize_from_real_payload() {
+        let payload = r#"[
+            {"id": "48602091189", "type": "PushEvent", "actor": {"login": "octocat"}},
+            {"id": "48602091190", "type": "PullRequestEvent", "actor": {"login": "octocat"}}
+        ]"#;
+        let events: Vec<PublicEvent> = serde_json::from_str(payload)
+            .expect("GitHub events payload should deserialize (id is a string, not _id)");
+        assert_eq!(events.len(), 2, "should parse both events");
+    }
+
+    #[test]
+    fn test_orgs_deserialize_from_real_payload() {
+        let payload = r#"[
+            {"login": "github", "id": 9919, "url": "https://api.github.com/orgs/github"}
+        ]"#;
+        let orgs: Vec<OrgItem> = serde_json::from_str(payload)
+            .expect("GitHub orgs payload should deserialize (login is a string, not _login)");
+        assert_eq!(orgs.len(), 1, "should parse the org");
     }
 }
