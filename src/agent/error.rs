@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::domains::analysis::error::AnalysisError;
-use crate::domains::llm::LlmError;
+use crate::domains::llm::error::LlmError;
 
 #[derive(Debug, Clone, PartialEq, Error)]
 pub enum GuardrailViolation {

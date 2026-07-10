@@ -62,7 +62,7 @@ impl Config {
         #[cfg(feature = "mistral")]
         let mistral_api_key = require_env("MISTRAL_API_KEY")?;
 
-        let listen_addr_raw = env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".into());
+        let listen_addr_raw = require_env("LISTEN_ADDR")?;
         let listen_addr = listen_addr_raw.parse::<SocketAddr>().map_err(|error| {
             error!(message = "Failed to parse listen address.", %error, value = %listen_addr_raw);
             ConfigError::InvalidListenAddr {
@@ -71,14 +71,12 @@ impl Config {
         })?;
 
         #[cfg(feature = "mistral")]
-        let mistral_model =
-            env::var("MISTRAL_MODEL").unwrap_or_else(|_| "mistral-small-latest".into());
+        let mistral_model = require_env("MISTRAL_MODEL")?;
 
         #[cfg(feature = "gemma")]
-        let gemma_base_url =
-            env::var("GEMMA_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".into());
+        let gemma_base_url = require_env("GEMMA_BASE_URL")?;
         #[cfg(feature = "gemma")]
-        let gemma_model = env::var("GEMMA_MODEL").unwrap_or_else(|_| "gemma-4-12b-it-qat".into());
+        let gemma_model = require_env("GEMMA_MODEL")?;
         #[cfg(feature = "gemma")]
         let gemma_api_key = env::var("GEMMA_API_KEY").ok();
 

@@ -5,15 +5,15 @@ use octocrab::models::pulls::ReviewAction;
 use serde::Deserialize;
 use tracing::error;
 
-use super::InstalledClient;
-use crate::domains::github::{
+use super::connector::InstalledClient;
+use crate::domains::github::entity::{
     CommitInfo,
-    GitHubClient,
-    GitHubError,
     RejectedPrInfo,
     RejectedPrSearchResult,
     UserInfo,
 };
+use crate::domains::github::error::GitHubError;
+use crate::domains::github::traits::GitHubClient;
 
 const DIFF_MAX_CHARS: usize = 30_000;
 const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
@@ -46,11 +46,13 @@ impl GitHubClient for InstalledClient {
                 GitHubError::Api
             })?;
 
-        let age_days =
-            u32::try_from((Utc::now() - profile.created_at).num_days().max(0)).unwrap_or(u32::MAX);
+        let age_days = u32::try_from((Utc::now() - profile.created_at).num_days().max(0))
+            .map_err(|_| GitHubError::InvalidResponse)?;
 
-        let public_repos = u32::try_from(profile.public_repos).unwrap_or(u32::MAX);
-        let followers = u32::try_from(profile.followers).unwrap_or(u32::MAX);
+        let public_repos =
+            u32::try_from(profile.public_repos).map_err(|_| GitHubError::InvalidResponse)?;
+        let followers =
+            u32::try_from(profile.followers).map_err(|_| GitHubError::InvalidResponse)?;
 
         Ok(UserInfo {
             account_age_days: age_days,
@@ -67,7 +69,8 @@ impl GitHubClient for InstalledClient {
             error!(message = "Failed to fetch user public events.", %error, login);
             GitHubError::Api
         })?;
-        let items_len = u32::try_from(page.items.len()).unwrap_or(u32::MAX);
+        let items_len =
+            u32::try_from(page.items.len()).map_err(|_| GitHubError::InvalidResponse)?;
         let total = match page.number_of_pages() {
             Some(n) if n > 1 => (n - 1) * 100 + items_len,
             _ => items_len,
@@ -83,7 +86,7 @@ impl GitHubClient for InstalledClient {
             error!(message = "Failed to fetch user organizations.", %error, login);
             GitHubError::Api
         })?;
-        Ok(u32::try_from(orgs.len()).unwrap_or(u32::MAX))
+        u32::try_from(orgs.len()).map_err(|_| GitHubError::InvalidResponse)
     }
 
     async fn fetch_merged_prs(
@@ -110,7 +113,7 @@ impl GitHubClient for InstalledClient {
         repo: &str,
         pr_number: u64,
     ) -> Result<String, GitHubError> {
-        let mut diff = self
+        let diff = self
             .octocrab
             .pulls(owner, repo)
             .get_diff(pr_number)
@@ -126,11 +129,7 @@ impl GitHubClient for InstalledClient {
                 GitHubError::Api
             })?;
 
-        if diff.len() > DIFF_MAX_CHARS {
-            diff.truncate(DIFF_MAX_CHARS);
-        }
-
-        Ok(diff)
+        Ok(truncate_chars(&diff, DIFF_MAX_CHARS))
     }
 
     async fn fetch_commits(
@@ -160,15 +159,9 @@ impl GitHubClient for InstalledClient {
         let commits: Vec<CommitInfo> = page
             .items
             .into_iter()
-            .map(|repo_commit| {
-                let mut message = repo_commit.commit.message;
-                if message.len() > COMMIT_MESSAGE_MAX_CHARS {
-                    message.truncate(COMMIT_MESSAGE_MAX_CHARS);
-                }
-                CommitInfo {
-                    sha: repo_commit.sha,
-                    message,
-                }
+            .map(|repo_commit| CommitInfo {
+                sha: repo_commit.sha,
+                message: truncate_chars(&repo_commit.commit.message, COMMIT_MESSAGE_MAX_CHARS),
             })
             .collect();
 
@@ -181,10 +174,6 @@ impl GitHubClient for InstalledClient {
         repo: &str,
         pr_number: u64,
     ) -> Result<bool, GitHubError> {
-        // The Reviews API returns results in chronological order with no sort
-        // option. Scan up to MAX_REVIEW_PAGES pages; if we still haven't found
-        // our review by then, allow a fresh triage — a PR with that many
-        // reviews deserves an updated score anyway.
         for page_number in 1..=MAX_REVIEW_PAGES {
             let page = self
                 .octocrab
@@ -291,28 +280,7 @@ impl GitHubClient for InstalledClient {
             Err(octocrab::Error::GitHub {
                 ref source, ..
             }) if source.status_code == http::StatusCode::NOT_FOUND => {
-                let create_result = self
-                    .octocrab
-                    .issues(owner, repo)
-                    .create_label(&name, &color, &description)
-                    .await;
-
-                match create_result {
-                    Ok(_) => Ok(()),
-                    Err(octocrab::Error::GitHub {
-                        ref source, ..
-                    }) if source.status_code == http::StatusCode::UNPROCESSABLE_ENTITY => Ok(()),
-                    Err(error) => {
-                        error!(
-                            message = "Failed to create label.",
-                            %error,
-                            owner,
-                            repo,
-                            label = %name,
-                        );
-                        Err(GitHubError::Api)
-                    }
-                }
+                create_label(self, owner, repo, &name, &color, &description).await
             }
             Err(error) => {
                 error!(
@@ -386,11 +354,12 @@ impl InstalledClient {
     ) -> Result<RejectedPrSearchResult, GitHubError> {
         const MAX_RESULTS: usize = 5;
 
+        let page_size = u8::try_from(MAX_RESULTS).map_err(|_| GitHubError::InvalidResponse)?;
         let page = self
             .octocrab
             .search()
             .issues_and_pull_requests(query)
-            .per_page(u8::try_from(MAX_RESULTS).unwrap_or(u8::MAX))
+            .per_page(page_size)
             .send()
             .await
             .map_err(|error| {
@@ -398,7 +367,10 @@ impl InstalledClient {
                 GitHubError::Api
             })?;
 
-        let total_count = u32::try_from(page.total_count.unwrap_or(0)).unwrap_or(u32::MAX);
+        let total_count = page
+            .total_count
+            .ok_or(GitHubError::InvalidResponse)
+            .and_then(|count| u32::try_from(count).map_err(|_| GitHubError::InvalidResponse))?;
 
         let items: Vec<RejectedPrInfo> = page
             .items
@@ -433,9 +405,46 @@ impl InstalledClient {
                 GitHubError::Api
             })?;
 
-        let count = page.total_count.unwrap_or(0);
-        let count_u32 = u32::try_from(count).unwrap_or(u32::MAX);
-
-        Ok(count_u32)
+        let count = page.total_count.ok_or(GitHubError::InvalidResponse)?;
+        u32::try_from(count).map_err(|_| GitHubError::InvalidResponse)
     }
+}
+
+async fn create_label(
+    client: &InstalledClient,
+    owner: &str,
+    repo: &str,
+    name: &str,
+    color: &str,
+    description: &str,
+) -> Result<(), GitHubError> {
+    let result = client
+        .octocrab
+        .issues(owner, repo)
+        .create_label(name, color, description)
+        .await;
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(octocrab::Error::GitHub {
+            ref source, ..
+        }) if source.status_code == http::StatusCode::UNPROCESSABLE_ENTITY => Ok(()),
+        Err(error) => {
+            error!(
+                message = "Failed to create label.",
+                %error,
+                owner,
+                repo,
+                label = %name,
+            );
+            Err(GitHubError::Api)
+        }
+    }
+}
+
+fn truncate_chars(
+    input: &str,
+    max_chars: usize,
+) -> String {
+    input.chars().take(max_chars).collect()
 }

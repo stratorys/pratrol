@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use crate::app::triage::service::TriageService;
+use crate::app::triage::workflow::Triage;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub triage_service: Arc<TriageService>,
+    pub triage: Arc<Triage>,
     pub webhook_secret: Arc<str>,
 }

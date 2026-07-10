@@ -17,10 +17,13 @@ pub fn build(
     diff: &str,
     commits: &[&str],
 ) -> ChatRequest {
-    let mut commits_text = String::with_capacity(commits.len() * 80);
-    for (index, message) in commits.iter().enumerate() {
-        let _ = writeln!(commits_text, "{}. {}", index + 1, message);
-    }
+    let commits_text = commits.iter().enumerate().fold(
+        String::with_capacity(commits.len() * 80),
+        |mut text, (index, message)| {
+            let _ = writeln!(text, "{}. {message}", index + 1);
+            text
+        },
+    );
 
     let sentinel_diff = random_sentinel();
     let sentinel_commits = random_sentinel();

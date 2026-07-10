@@ -1,5 +1,5 @@
 use super::entity::CommentPayload;
-use crate::sanitize::sanitize_plain_text;
+use crate::sanitize::text::sanitize_plain_text;
 
 const TRIAGE_TEMPLATE: &str = include_str!("templates/triage.md");
 const PARTIAL_NOTE: &str = include_str!("templates/partial_note.md");
@@ -9,7 +9,7 @@ pub fn markdown(payload: &CommentPayload) -> String {
     let quality_badge = tier_badge(&payload.quality_tier_icon, &payload.quality_tier_label);
     let combined_badge = tier_badge(&payload.combined_tier_icon, &payload.combined_tier_label);
 
-    let mut output = TRIAGE_TEMPLATE
+    let output = TRIAGE_TEMPLATE
         .replace(
             "{{profile_score}}",
             &format!("{:.0}", payload.profile_score),
@@ -35,31 +35,40 @@ pub fn markdown(payload: &CommentPayload) -> String {
             &sanitize_plain_text(&payload.recommendation),
         );
 
-    if !payload.history_section.is_empty() {
-        output.push_str(&payload.history_section);
-    }
+    let history = if payload.history_section.is_empty() {
+        String::new()
+    } else {
+        payload.history_section.clone()
+    };
+    let partial_note = if payload.analysis_partial {
+        PARTIAL_NOTE.to_owned()
+    } else {
+        String::new()
+    };
 
-    if payload.analysis_partial {
-        output.push_str(PARTIAL_NOTE);
-    }
-
-    output
+    format!("{output}{history}{partial_note}")
 }
 
 fn tier_badge(
     icon: &str,
     label: &str,
 ) -> &'static str {
-    match icon {
+    let icon_badge = match icon {
         "+" => "🟢",
         "~" => "🟡",
         "-" => "🔴",
-        _ => match label.to_ascii_lowercase().as_str() {
-            "high" => "🟢",
-            "medium" => "🟡",
-            "low" => "🔴",
-            _ => "⚪",
-        },
+        _ => "",
+    };
+
+    if !icon_badge.is_empty() {
+        return icon_badge;
+    }
+
+    match label.to_ascii_lowercase().as_str() {
+        "high" => "🟢",
+        "medium" => "🟡",
+        "low" => "🔴",
+        _ => "⚪",
     }
 }
 

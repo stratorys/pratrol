@@ -20,14 +20,14 @@ use tracing_subscriber::EnvFilter;
 
 use crate::agent::harness::Harness;
 use crate::api::state::AppState;
-use crate::app::triage::service::TriageService;
+use crate::app::triage::workflow::Triage;
 use crate::config::Config;
 #[cfg(feature = "gemma")]
-use crate::connectors::gemma::GemmaConnector;
-use crate::connectors::github::GitHubConnector;
+use crate::connectors::gemma::connector::GemmaConnector;
+use crate::connectors::github::connector::GitHubConnector;
 #[cfg(feature = "mistral")]
-use crate::connectors::mistral::MistralConnector;
-use crate::domains::llm::Llm;
+use crate::connectors::mistral::connector::MistralConnector;
+use crate::domains::llm::traits::Llm;
 use crate::error::AppError;
 
 #[cfg(all(feature = "mistral", feature = "gemma"))]
@@ -65,14 +65,14 @@ async fn run() -> Result<(), AppError> {
     #[cfg(feature = "gemma")]
     let llm: Arc<dyn Llm> = Arc::new(GemmaConnector::new(&config)?);
 
-    let triage_service = Arc::new(TriageService::new(github, Harness::new(llm)));
+    let triage = Arc::new(Triage::new(github, Harness::new(llm)));
 
     let state = AppState {
-        triage_service,
+        triage,
         webhook_secret: config.github_webhook_secret.into(),
     };
 
-    let app = api::router().with_state(state);
+    let app = api::router::router().with_state(state);
 
     let listener = tokio::net::TcpListener::bind(config.listen_addr)
         .await

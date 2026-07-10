@@ -6,11 +6,9 @@ use super::entity::{
     HistoryResult,
     HistorySignals,
 };
-use crate::domains::github::RejectedPrInfo;
-use crate::sanitize::{
-    sanitize_markdown_text,
-    sanitize_url,
-};
+use crate::domains::github::entity::RejectedPrInfo;
+use crate::sanitize::text::sanitize_markdown_text;
+use crate::sanitize::url::sanitize_url;
 
 const AUTHOR_REPO_PENALTY_MAX: f64 = 10.0;
 const AUTHOR_REPO_DIVISOR: f64 = 5.0;

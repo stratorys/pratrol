@@ -5,12 +5,10 @@ use serde::{
 };
 use tracing::error;
 
-use super::GemmaConnector;
-use crate::domains::llm::{
-    ChatRequest,
-    Llm,
-    LlmError,
-};
+use super::connector::GemmaConnector;
+use crate::domains::llm::entity::ChatRequest;
+use crate::domains::llm::error::LlmError;
+use crate::domains::llm::traits::Llm;
 
 #[derive(Serialize)]
 struct GemmaChatRequest {

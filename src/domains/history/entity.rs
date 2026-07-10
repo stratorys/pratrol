@@ -1,4 +1,4 @@
-use crate::domains::github::RejectedPrInfo;
+use crate::domains::github::entity::RejectedPrInfo;
 
 pub struct HistorySignals {
     pub author_in_repo: u32,

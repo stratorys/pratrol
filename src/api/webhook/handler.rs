@@ -68,9 +68,9 @@ pub async fn handle_webhook(
     let triage_id = request.id;
     let pr_number = request.pr_number;
     let repo_full_name = event.repository.full_name.clone();
-    let triage_service = state.triage_service.clone();
+    let triage = state.triage.clone();
     tokio::spawn(async move {
-        match triage_service.execute(request).await {
+        match triage.execute(request).await {
             Ok(()) => {}
             Err(error) => {
                 error!(
@@ -126,13 +126,11 @@ fn verify_signature(
 }
 
 fn split_full_name(full_name: &str) -> Option<(String, String)> {
-    let mut parts = full_name.splitn(2, '/');
-    let owner = parts.next()?.to_owned();
-    let repo = parts.next()?.to_owned();
+    let (owner, repo) = full_name.split_once('/')?;
     if owner.is_empty() || repo.is_empty() {
         return None;
     }
-    Some((owner, repo))
+    Some((owner.to_owned(), repo.to_owned()))
 }
 
 #[cfg(test)]

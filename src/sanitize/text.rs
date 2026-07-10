@@ -82,15 +82,14 @@ fn truncate_chars(
     input: &str,
     max_chars: usize,
 ) -> String {
-    let mut output = String::with_capacity(input.len().min(max_chars.saturating_mul(4)));
-    for (idx, ch) in input.chars().enumerate() {
-        if idx == max_chars {
-            output.push('…');
-            return output;
-        }
-        output.push(ch);
+    let output = input.chars().take(max_chars).collect::<String>();
+    let truncated = input.chars().count() > max_chars;
+
+    if truncated {
+        format!("{output}…")
+    } else {
+        output
     }
-    output
 }
 
 #[cfg(test)]

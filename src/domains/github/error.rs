@@ -5,4 +5,7 @@ pub enum GitHubError {
 
     #[error("github app credential setup failed")]
     Jwt,
+
+    #[error("github returned an invalid response")]
+    InvalidResponse,
 }

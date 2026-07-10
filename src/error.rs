@@ -1,6 +1,6 @@
 use crate::config::ConfigError;
-use crate::domains::github::GitHubError;
-use crate::domains::llm::LlmError;
+use crate::domains::github::error::GitHubError;
+use crate::domains::llm::error::LlmError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {

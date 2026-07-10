@@ -10,7 +10,7 @@ use crate::domains::analysis::{
     parse,
     prompt,
 };
-use crate::domains::llm::Llm;
+use crate::domains::llm::traits::Llm;
 
 pub struct Harness {
     llm: Arc<dyn Llm>,
@@ -29,19 +29,23 @@ impl Harness {
     ) -> AgentOutcome {
         let request = prompt::build(input.diff, input.commit_messages);
 
-        match self.llm.chat_completion(&request).await {
-            Err(error) => AgentOutcome::Degraded(DegradeReason::LlmUnavailable(error)),
-            Ok(raw) => match parse::response(&raw) {
-                Err(error) => AgentOutcome::Degraded(DegradeReason::UnparsableResponse(error)),
-                Ok(analysis) => {
-                    let violations = guardrails::evaluate(&raw, &analysis);
-                    if violations.is_empty() {
-                        AgentOutcome::Validated(analysis)
-                    } else {
-                        AgentOutcome::Degraded(DegradeReason::GuardrailViolations(violations))
-                    }
-                }
-            },
+        let raw = match self.llm.chat_completion(&request).await {
+            Ok(raw) => raw,
+            Err(error) => return AgentOutcome::Degraded(DegradeReason::LlmUnavailable(error)),
+        };
+
+        let analysis = match parse::response(&raw) {
+            Ok(analysis) => analysis,
+            Err(error) => {
+                return AgentOutcome::Degraded(DegradeReason::UnparsableResponse(error));
+            }
+        };
+
+        let violations = guardrails::evaluate(&raw, &analysis);
+        if violations.is_empty() {
+            AgentOutcome::Validated(analysis)
+        } else {
+            AgentOutcome::Degraded(DegradeReason::GuardrailViolations(violations))
         }
     }
 }
@@ -50,12 +54,10 @@ impl Harness {
 mod tests {
     use super::*;
     use crate::agent::error::GuardrailViolation;
-    use crate::domains::analysis::SENTINEL_PREFIX;
     use crate::domains::analysis::error::AnalysisError;
-    use crate::domains::llm::{
-        LlmError,
-        MockLlm,
-    };
+    use crate::domains::analysis::prompt::SENTINEL_PREFIX;
+    use crate::domains::llm::error::LlmError;
+    use crate::domains::llm::traits::MockLlm;
 
     fn mock_ok(raw: &str) -> MockLlm {
         let response = raw.to_owned();
@@ -114,7 +116,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_out_of_range_score_is_unparsable() {
-        let raw = r#"{"code_coherence": 15.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "test"}"#;
+        let raw = r#"{"code_coherence": 15.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "test", "key_signal": "signal", "recommendation": "review"}"#;
         let outcome = run_capture(mock_ok(raw)).await;
         assert!(
             matches!(

@@ -38,9 +38,7 @@ struct RawAnalysis {
     risk_level: f64,
     suspicious_patterns: f64,
     summary: String,
-    #[serde(default)]
     key_signal: String,
-    #[serde(default)]
     recommendation: String,
 }
 
@@ -75,7 +73,7 @@ mod tests {
 
     #[test]
     fn test_parse_response_valid_json() {
-        let json = r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "A good PR."}"#;
+        let json = r#"{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "A good PR.", "key_signal": "Focused change.", "recommendation": "Review normally."}"#;
         let result = response(json);
         assert!(result.is_ok(), "should parse valid JSON");
         let analysis = result.ok();
@@ -94,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_parse_response_field_out_of_range() {
-        let json = r#"{"code_coherence": 15.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "test"}"#;
+        let json = r#"{"code_coherence": 15.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "test", "key_signal": "signal", "recommendation": "review"}"#;
         let result = response(json);
         assert!(result.is_err(), "should fail on out-of-range field");
         assert!(
@@ -106,7 +104,7 @@ mod tests {
     #[test]
     fn test_parse_response_extracts_json_from_text() {
         let raw = r#"Here is my analysis:
-{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "test"}
+{"code_coherence": 8.0, "commit_quality": 7.0, "risk_level": 2.0, "suspicious_patterns": 1.0, "summary": "test", "key_signal": "signal", "recommendation": "review"}
 Hope this helps!"#;
         let result = response(raw);
         assert!(result.is_ok(), "should extract JSON from surrounding text");
