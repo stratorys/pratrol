@@ -1,11 +1,8 @@
-use std::time::Duration;
-
 use tracing::error;
 
+use super::constants::REQUEST_TIMEOUT;
 use crate::config::Config;
 use crate::domains::llm::error::LlmError;
-
-const REQUEST_TIMEOUT: Duration = Duration::from_mins(1);
 
 pub struct MistralConnector {
     pub(crate) http_client: reqwest::Client,

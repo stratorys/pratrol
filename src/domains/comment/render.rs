@@ -1,52 +1,49 @@
+use askama::Template;
+
 use super::entity::CommentPayload;
-use crate::sanitize::text::sanitize_plain_text;
+use super::history;
+use crate::sanitize::text::{
+    SanitizedText,
+    sanitize_plain_text,
+};
 
-const TRIAGE_TEMPLATE: &str = include_str!("templates/triage.md");
-const PARTIAL_NOTE: &str = include_str!("templates/partial_note.md");
+#[derive(Template)]
+#[template(path = "domains/comment/templates/triage.md")]
+struct TriageTemplate<'payload> {
+    combined_badge: &'payload str,
+    combined_tier: &'payload str,
+    profile_score: String,
+    profile_badge: &'payload str,
+    profile_tier: &'payload str,
+    quality_score: String,
+    quality_badge: &'payload str,
+    quality_tier: &'payload str,
+    combined_score: String,
+    summary: SanitizedText,
+    key_signal: SanitizedText,
+    recommendation: SanitizedText,
+    history: String,
+    partial: bool,
+}
 
-pub fn markdown(payload: &CommentPayload) -> String {
-    let profile_badge = tier_badge(&payload.profile_tier_icon, &payload.profile_tier_label);
-    let quality_badge = tier_badge(&payload.quality_tier_icon, &payload.quality_tier_label);
-    let combined_badge = tier_badge(&payload.combined_tier_icon, &payload.combined_tier_label);
-
-    let output = TRIAGE_TEMPLATE
-        .replace(
-            "{{profile_score}}",
-            &format!("{:.0}", payload.profile_score),
-        )
-        .replace("{{profile_badge}}", profile_badge)
-        .replace("{{profile_tier}}", &payload.profile_tier_label)
-        .replace(
-            "{{quality_score}}",
-            &format!("{:.0}", payload.quality_score),
-        )
-        .replace("{{quality_badge}}", quality_badge)
-        .replace("{{quality_tier}}", &payload.quality_tier_label)
-        .replace(
-            "{{combined_score}}",
-            &format!("{:.0}", payload.combined_score),
-        )
-        .replace("{{combined_badge}}", combined_badge)
-        .replace("{{combined_tier}}", &payload.combined_tier_label)
-        .replace("{{summary}}", &sanitize_plain_text(&payload.summary))
-        .replace("{{key_signal}}", &sanitize_plain_text(&payload.key_signal))
-        .replace(
-            "{{recommendation}}",
-            &sanitize_plain_text(&payload.recommendation),
-        );
-
-    let history = if payload.history_section.is_empty() {
-        String::new()
-    } else {
-        payload.history_section.clone()
-    };
-    let partial_note = if payload.analysis_partial {
-        PARTIAL_NOTE.to_owned()
-    } else {
-        String::new()
-    };
-
-    format!("{output}{history}{partial_note}")
+pub fn markdown(payload: &CommentPayload) -> Result<String, askama::Error> {
+    TriageTemplate {
+        combined_badge: tier_badge(&payload.combined_tier_icon, &payload.combined_tier_label),
+        combined_tier: &payload.combined_tier_label,
+        profile_score: format!("{:.0}", payload.profile_score),
+        profile_badge: tier_badge(&payload.profile_tier_icon, &payload.profile_tier_label),
+        profile_tier: &payload.profile_tier_label,
+        quality_score: format!("{:.0}", payload.quality_score),
+        quality_badge: tier_badge(&payload.quality_tier_icon, &payload.quality_tier_label),
+        quality_tier: &payload.quality_tier_label,
+        combined_score: format!("{:.0}", payload.combined_score),
+        summary: sanitize_plain_text(&payload.summary),
+        key_signal: sanitize_plain_text(&payload.key_signal),
+        recommendation: sanitize_plain_text(&payload.recommendation),
+        history: history::render(&payload.history),
+        partial: payload.analysis_partial,
+    }
+    .render()
 }
 
 fn tier_badge(
@@ -75,6 +72,22 @@ fn tier_badge(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domains::history::entity::{
+        HistoryDetails,
+        HistoryPresentation,
+    };
+
+    fn empty_history() -> HistoryPresentation {
+        HistoryPresentation::Available(HistoryDetails {
+            author_in_repo: 0,
+            author_in_repo_items: vec![],
+            title_in_repo: 0,
+            title_in_repo_items: vec![],
+            author_global: 0,
+            is_repeat_offender: false,
+            current_pr_number: 1,
+        })
+    }
 
     fn sample_payload(partial: bool) -> CommentPayload {
         CommentPayload {
@@ -91,13 +104,17 @@ mod tests {
             key_signal: "Clean separation of concerns.".to_owned(),
             recommendation: "Approve after verifying tests pass.".to_owned(),
             analysis_partial: partial,
-            history_section: String::new(),
+            history: empty_history(),
         }
+    }
+
+    fn render(payload: &CommentPayload) -> String {
+        markdown(payload).expect("triage comment should render")
     }
 
     #[test]
     fn test_render_contains_scores_and_tiers() {
-        let output = markdown(&sample_payload(false));
+        let output = render(&sample_payload(false));
         assert!(
             output.contains("Pratrol Triage Brief"),
             "should contain brief heading"
@@ -134,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_render_partial_appends_note() {
-        let output = markdown(&sample_payload(true));
+        let output = render(&sample_payload(true));
         assert!(
             output.contains("AI analysis was unavailable"),
             "should contain partial note"
@@ -146,7 +163,7 @@ mod tests {
         let mut payload = sample_payload(false);
         payload.summary = "Ping @security-team <script>alert(1)</script>".to_owned();
 
-        let output = markdown(&payload);
+        let output = render(&payload);
         assert!(
             output.contains("@\u{200B}security-team"),
             "should neutralize mentions"
@@ -166,7 +183,7 @@ mod tests {
         let mut payload = sample_payload(false);
         payload.summary = "é".repeat(301);
 
-        let output = markdown(&payload);
+        let output = render(&payload);
 
         assert!(
             output.contains("…"),

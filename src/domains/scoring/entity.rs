@@ -1,7 +1,12 @@
 use std::fmt;
 
-pub struct Score {
-    pub value: f64,
+#[derive(Debug, Clone, Copy)]
+pub struct Score(f64);
+
+impl Score {
+    pub fn new(value: f64) -> Self { Self(value.clamp(0.0, 100.0)) }
+
+    pub fn value(self) -> f64 { self.0 }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -35,9 +40,9 @@ impl Tier {
 
     pub fn label(self) -> &'static str {
         match self {
-            Tier::High => "patrol:trusted",
-            Tier::Medium => "patrol:suspicious",
-            Tier::Low => "patrol:spam",
+            Tier::High => "pratrol:trusted",
+            Tier::Medium => "pratrol:suspicious",
+            Tier::Low => "pratrol:spam",
         }
     }
 

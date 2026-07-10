@@ -9,12 +9,16 @@ mod sanitize;
 
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::time::Duration;
 
 use rustls::crypto::CryptoProvider;
 use rustls::crypto::ring::default_provider;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::{
     error,
     info,
+    warn,
 };
 use tracing_subscriber::EnvFilter;
 
@@ -34,6 +38,8 @@ use crate::error::AppError;
 compile_error!("features `mistral` and `gemma` are mutually exclusive");
 #[cfg(not(any(feature = "mistral", feature = "gemma")))]
 compile_error!("enable exactly one LLM engine: `mistral` or `gemma`");
+
+const SHUTDOWN_GRACE: Duration = Duration::from_secs(25);
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -67,9 +73,14 @@ async fn run() -> Result<(), AppError> {
 
     let triage = Arc::new(Triage::new(github, Harness::new(llm)));
 
+    let tasks = TaskTracker::new();
+    let shutdown_token = CancellationToken::new();
+
     let state = AppState {
         triage,
         webhook_secret: config.github_webhook_secret.into(),
+        tasks: tasks.clone(),
+        shutdown: shutdown_token.clone(),
     };
 
     let app = api::router::router().with_state(state);
@@ -83,7 +94,7 @@ async fn run() -> Result<(), AppError> {
 
     info!(message = "Server started.", addr = %config.listen_addr);
 
-    let shutdown = async {
+    let shutdown_signal = async {
         let ctrl_c = tokio::signal::ctrl_c();
         let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .expect("Failed to install SIGTERM handler.");
@@ -95,12 +106,23 @@ async fn run() -> Result<(), AppError> {
     };
 
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown)
+        .with_graceful_shutdown(shutdown_signal)
         .await
         .map_err(|error| {
             error!(message = "Server failed while serving requests.", %error);
             AppError::Io
         })?;
+
+    tasks.close();
+    info!(message = "HTTP drained, waiting for in-flight triage tasks.");
+    if tokio::time::timeout(SHUTDOWN_GRACE, tasks.wait())
+        .await
+        .is_err()
+    {
+        warn!(message = "Grace period exceeded, cancelling in-flight triage tasks.");
+        shutdown_token.cancel();
+        tasks.wait().await;
+    }
 
     info!(message = "Server stopped.");
 

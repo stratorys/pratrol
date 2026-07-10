@@ -19,6 +19,8 @@ pub enum DegradeReason {
     LlmUnavailable(#[source] LlmError),
     #[error("unparsable response: {0}")]
     UnparsableResponse(#[source] AnalysisError),
+    #[error("failed to render analysis prompt: {0}")]
+    PromptRender(#[source] askama::Error),
     #[error("guardrail violations: {}", join_violations(.0))]
     GuardrailViolations(Vec<GuardrailViolation>),
 }

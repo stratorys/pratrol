@@ -1,37 +1,34 @@
+use super::constants::{
+    ACCOUNT_AGE_DAYS_CAP,
+    CONTRIBUTIONS_CAP,
+    FOLLOWERS_CAP,
+    ORGS_CAP,
+    PRS_ELSEWHERE_CAP,
+    PRS_TARGET_CAP,
+    PUBLIC_REPOS_CAP,
+    QUALITY_DIMENSION_MAX,
+    TIER_HIGH_MIN,
+    TIER_MEDIUM_MIN,
+    WEIGHT_ACCOUNT_AGE,
+    WEIGHT_CODE_COHERENCE,
+    WEIGHT_COMMIT_QUALITY,
+    WEIGHT_CONTRIBUTIONS,
+    WEIGHT_FOLLOWERS,
+    WEIGHT_ORGS,
+    WEIGHT_PROFILE,
+    WEIGHT_PRS_ELSEWHERE,
+    WEIGHT_PRS_TARGET,
+    WEIGHT_PUBLIC_REPOS,
+    WEIGHT_QUALITY,
+    WEIGHT_RISK_LEVEL,
+    WEIGHT_SUSPICIOUS_PATTERNS,
+};
 use super::entity::{
     ProfileSignals,
     QualitySignals,
     Score,
     Tier,
 };
-
-const ACCOUNT_AGE_DAYS_CAP: f64 = 1095.0;
-const PUBLIC_REPOS_CAP: f64 = 50.0;
-const FOLLOWERS_CAP: f64 = 100.0;
-const CONTRIBUTIONS_CAP: f64 = 300.0;
-const PRS_TARGET_CAP: f64 = 10.0;
-const PRS_ELSEWHERE_CAP: f64 = 50.0;
-const ORGS_CAP: f64 = 5.0;
-
-const WEIGHT_ACCOUNT_AGE: f64 = 0.15;
-const WEIGHT_PUBLIC_REPOS: f64 = 0.10;
-const WEIGHT_FOLLOWERS: f64 = 0.05;
-const WEIGHT_CONTRIBUTIONS: f64 = 0.15;
-const WEIGHT_PRS_TARGET: f64 = 0.30;
-const WEIGHT_PRS_ELSEWHERE: f64 = 0.15;
-const WEIGHT_ORGS: f64 = 0.10;
-
-const WEIGHT_CODE_COHERENCE: f64 = 0.30;
-const WEIGHT_COMMIT_QUALITY: f64 = 0.20;
-const WEIGHT_RISK_LEVEL: f64 = 0.25;
-const WEIGHT_SUSPICIOUS_PATTERNS: f64 = 0.25;
-const QUALITY_DIMENSION_MAX: f64 = 10.0;
-
-const WEIGHT_PROFILE: f64 = 0.4;
-const WEIGHT_QUALITY: f64 = 0.6;
-
-const TIER_HIGH_MIN: f64 = 70.0;
-const TIER_MEDIUM_MIN: f64 = 40.0;
 
 pub fn profile_score(signals: &ProfileSignals) -> Score {
     let account_age_norm = (f64::from(signals.account_age_days) / ACCOUNT_AGE_DAYS_CAP).min(1.0);
@@ -51,9 +48,7 @@ pub fn profile_score(signals: &ProfileSignals) -> Score {
         + orgs_norm * WEIGHT_ORGS)
         * 100.0;
 
-    Score {
-        value,
-    }
+    Score::new(value)
 }
 
 pub fn quality_score(signals: &QualitySignals) -> Score {
@@ -65,9 +60,7 @@ pub fn quality_score(signals: &QualitySignals) -> Score {
             * WEIGHT_SUSPICIOUS_PATTERNS)
         * 100.0;
 
-    Score {
-        value,
-    }
+    Score::new(value)
 }
 
 pub fn combine(
@@ -106,9 +99,9 @@ mod tests {
         };
         let score = profile_score(&signals);
         assert!(
-            score.value.abs() < f64::EPSILON,
+            score.value().abs() < f64::EPSILON,
             "expected 0, got {}",
-            score.value
+            score.value()
         );
     }
 
@@ -125,9 +118,9 @@ mod tests {
         };
         let score = profile_score(&signals);
         assert!(
-            (score.value - 100.0).abs() < f64::EPSILON,
+            (score.value() - 100.0).abs() < f64::EPSILON,
             "expected 100, got {}",
-            score.value
+            score.value()
         );
     }
 
@@ -141,9 +134,9 @@ mod tests {
         };
         let score = quality_score(&signals);
         assert!(
-            (score.value - 100.0).abs() < f64::EPSILON,
+            (score.value() - 100.0).abs() < f64::EPSILON,
             "expected 100, got {}",
-            score.value
+            score.value()
         );
     }
 
@@ -157,9 +150,9 @@ mod tests {
         };
         let score = quality_score(&signals);
         assert!(
-            score.value.abs() < f64::EPSILON,
+            score.value().abs() < f64::EPSILON,
             "expected 0, got {}",
-            score.value
+            score.value()
         );
     }
 

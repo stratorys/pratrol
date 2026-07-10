@@ -1,3 +1,5 @@
+use crate::domains::history::entity::HistoryPresentation;
+
 pub struct CommentPayload {
     pub profile_score: f64,
     pub profile_tier_label: String,
@@ -12,5 +14,5 @@ pub struct CommentPayload {
     pub key_signal: String,
     pub recommendation: String,
     pub analysis_partial: bool,
-    pub history_section: String,
+    pub history: HistoryPresentation,
 }

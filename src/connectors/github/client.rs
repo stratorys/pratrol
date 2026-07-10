@@ -6,6 +6,11 @@ use serde::Deserialize;
 use tracing::error;
 
 use super::connector::InstalledClient;
+use super::constants::{
+    COMMIT_MESSAGE_MAX_CHARS,
+    MAX_REVIEW_PAGES,
+    PER_PAGE,
+};
 use crate::domains::github::entity::{
     CommitInfo,
     RejectedPrInfo,
@@ -15,11 +20,6 @@ use crate::domains::github::entity::{
 use crate::domains::github::error::GitHubError;
 use crate::domains::github::traits::GitHubClient;
 use crate::sanitize::text::truncate_chars;
-
-const DIFF_MAX_CHARS: usize = 30_000;
-const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
-
-const MAX_REVIEW_PAGES: u32 = 3;
 
 #[derive(Deserialize)]
 struct PublicEvent {}
@@ -69,7 +69,7 @@ impl GitHubClient for InstalledClient {
         let items_len =
             u32::try_from(page.items.len()).map_err(|_| GitHubError::InvalidResponse)?;
         let total = match page.number_of_pages() {
-            Some(n) if n > 1 => (n - 1) * 100 + items_len,
+            Some(n) if n > 1 => (n - 1) * u32::from(PER_PAGE) + items_len,
             _ => items_len,
         };
         Ok(total)
@@ -126,7 +126,7 @@ impl GitHubClient for InstalledClient {
                 GitHubError::Api
             })?;
 
-        Ok(truncate_chars(&diff, DIFF_MAX_CHARS))
+        Ok(diff)
     }
 
     async fn fetch_commits(
@@ -139,7 +139,7 @@ impl GitHubClient for InstalledClient {
             .octocrab
             .pulls(owner, repo)
             .pr_commits(pr_number)
-            .per_page(100)
+            .per_page(PER_PAGE)
             .send()
             .await
             .map_err(|error| {
@@ -157,7 +157,6 @@ impl GitHubClient for InstalledClient {
             .items
             .into_iter()
             .map(|repo_commit| CommitInfo {
-                sha: repo_commit.sha,
                 message: truncate_chars(&repo_commit.commit.message, COMMIT_MESSAGE_MAX_CHARS),
             })
             .collect();
@@ -176,7 +175,7 @@ impl GitHubClient for InstalledClient {
                 .octocrab
                 .pulls(owner, repo)
                 .list_reviews(pr_number)
-                .per_page(100)
+                .per_page(PER_PAGE)
                 .page(page_number)
                 .send()
                 .await
@@ -198,7 +197,7 @@ impl GitHubClient for InstalledClient {
             {
                 return Ok(true);
             }
-            if page.items.len() < 100 {
+            if page.items.len() < usize::from(PER_PAGE) {
                 return Ok(false);
             }
         }
@@ -327,10 +326,11 @@ impl InstalledClient {
         &self,
         login: &str,
     ) -> Result<Page<PublicEvent>, octocrab::Error> {
+        let per_page = PER_PAGE.to_string();
         self.octocrab
             .get(
                 format!("/users/{login}/events/public"),
-                Some(&[("per_page", "100")]),
+                Some(&[("per_page", per_page.as_str())]),
             )
             .await
     }
@@ -340,8 +340,12 @@ impl InstalledClient {
         &self,
         login: &str,
     ) -> Result<Vec<OrgItem>, octocrab::Error> {
+        let per_page = PER_PAGE.to_string();
         self.octocrab
-            .get(format!("/users/{login}/orgs"), Some(&[("per_page", "100")]))
+            .get(
+                format!("/users/{login}/orgs"),
+                Some(&[("per_page", per_page.as_str())]),
+            )
             .await
     }
 
@@ -436,5 +440,34 @@ async fn create_label(
             );
             Err(GitHubError::Api)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        OrgItem,
+        PublicEvent,
+    };
+
+    #[test]
+    fn test_public_events_deserialize_from_real_payload() {
+        let payload = r#"[
+            {"id": "48602091189", "type": "PushEvent", "actor": {"login": "octocat"}},
+            {"id": "48602091190", "type": "PullRequestEvent", "actor": {"login": "octocat"}}
+        ]"#;
+        let events: Vec<PublicEvent> = serde_json::from_str(payload)
+            .expect("GitHub events payload should deserialize (id is a string, not _id)");
+        assert_eq!(events.len(), 2, "should parse both events");
+    }
+
+    #[test]
+    fn test_orgs_deserialize_from_real_payload() {
+        let payload = r#"[
+            {"login": "github", "id": 9919, "url": "https://api.github.com/orgs/github"}
+        ]"#;
+        let orgs: Vec<OrgItem> = serde_json::from_str(payload)
+            .expect("GitHub orgs payload should deserialize (login is a string, not _login)");
+        assert_eq!(orgs.len(), 1, "should parse the org");
     }
 }

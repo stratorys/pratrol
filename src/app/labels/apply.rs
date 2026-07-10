@@ -6,7 +6,7 @@ use crate::domains::github::traits::{
 };
 use crate::domains::scoring::entity::Tier;
 
-const REPEAT_OFFENDER_LABEL: &str = "patrol:repeat-offender";
+const REPEAT_OFFENDER_LABEL: &str = "pratrol:repeat-offender";
 const REPEAT_OFFENDER_COLOR: &str = "e4a012";
 const REPEAT_OFFENDER_DESCRIPTION: &str = "Author has multiple closed-without-merge PRs";
 

@@ -1,0 +1,1 @@
+pub(super) const SUSPICIOUS_APPROVAL_THRESHOLD: f64 = 8.0;

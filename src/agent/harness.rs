@@ -27,7 +27,10 @@ impl Harness {
         &self,
         input: &AgentInput<'_>,
     ) -> AgentOutcome {
-        let request = prompt::build(input.diff, input.commit_messages);
+        let request = match prompt::build(input.diff, input.commit_messages) {
+            Ok(request) => request,
+            Err(error) => return AgentOutcome::Degraded(DegradeReason::PromptRender(error)),
+        };
 
         let raw = match self.llm.chat_completion(&request).await {
             Ok(raw) => raw,

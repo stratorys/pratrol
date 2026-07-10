@@ -5,10 +5,10 @@ pub struct UserInfo {
 }
 
 pub struct CommitInfo {
-    pub sha: String,
     pub message: String,
 }
 
+#[derive(Clone)]
 pub struct RejectedPrInfo {
     pub number: u64,
     pub title: String,

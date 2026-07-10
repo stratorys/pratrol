@@ -1,8 +1,7 @@
+use super::constants::SUSPICIOUS_APPROVAL_THRESHOLD;
 use super::error::GuardrailViolation;
 use crate::domains::analysis::entity::AnalysisResult;
 use crate::domains::analysis::prompt::SENTINEL_PREFIX;
-
-const SUSPICIOUS_APPROVAL_THRESHOLD: f64 = 8.0;
 
 const URL_MARKERS: [&str; 3] = ["http://", "https://", "www."];
 

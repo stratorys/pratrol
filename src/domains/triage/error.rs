@@ -5,6 +5,6 @@ pub enum TriageError {
     #[error("github operation failed")]
     GitHub(#[from] GitHubError),
 
-    #[error("pull request has no commits")]
-    NoCommits,
+    #[error("failed to render triage comment")]
+    Render(#[from] askama::Error),
 }

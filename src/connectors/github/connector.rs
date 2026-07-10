@@ -5,6 +5,10 @@ use jsonwebtoken::EncodingKey;
 use octocrab::Octocrab;
 use tracing::error;
 
+use super::constants::{
+    CONNECT_TIMEOUT,
+    READ_TIMEOUT,
+};
 use crate::domains::github::error::GitHubError;
 use crate::domains::github::traits::{
     GitHubApp,
@@ -26,6 +30,8 @@ impl GitHubConnector {
             GitHubError::Jwt
         })?;
         let app = Octocrab::builder()
+            .set_connect_timeout(Some(CONNECT_TIMEOUT))
+            .set_read_timeout(Some(READ_TIMEOUT))
             .app(app_id.into(), key)
             .build()
             .map_err(|error| {

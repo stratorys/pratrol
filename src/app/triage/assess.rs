@@ -66,16 +66,16 @@ fn degraded(reason: &DegradeReason) -> Assessment {
             "AI analysis was rejected by safety guardrails.",
             "AI output failed guardrail checks.",
         ),
-        DegradeReason::LlmUnavailable(_) | DegradeReason::UnparsableResponse(_) => (
+        DegradeReason::LlmUnavailable(_)
+        | DegradeReason::UnparsableResponse(_)
+        | DegradeReason::PromptRender(_) => (
             "Analysis was partial due to an error contacting the AI service.",
             "AI analysis unavailable.",
         ),
     };
 
     Assessment {
-        quality_score: Score {
-            value: 0.0,
-        },
+        quality_score: Score::new(0.0),
         summary: summary.to_owned(),
         key_signal: key_signal.to_owned(),
         recommendation: "Manual review recommended.".to_owned(),

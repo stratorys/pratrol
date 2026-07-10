@@ -6,13 +6,12 @@ use crate::domains::comment::render;
 use crate::domains::history::entity::HistoryResult;
 use crate::domains::history::evaluate;
 use crate::domains::scoring::compute;
+use crate::domains::scoring::constants::PARTIAL_ANALYSIS_SCORE_CAP;
 use crate::domains::scoring::entity::{
     Score,
     Tier,
 };
 use crate::domains::triage::error::TriageError;
-
-const PARTIAL_ANALYSIS_SCORE_CAP: f64 = 39.0;
 
 pub struct Decision {
     pub adjusted_score: f64,
@@ -37,7 +36,7 @@ pub fn triage(
         Some(signals) => evaluate::history(signals, context.request.pr_number),
         None => evaluate::unavailable(),
     };
-    let (raw_score, _) = compute::combine(profile_score.value, assessment.quality_score.value);
+    let (raw_score, _) = compute::combine(profile_score.value(), assessment.quality_score.value());
 
     let adjusted_score = (raw_score - history.penalty).max(0.0);
     let adjusted_score = if assessment.partial {
@@ -48,10 +47,10 @@ pub fn triage(
 
     Decision {
         adjusted_score,
-        profile_score: profile_score.value,
+        profile_score: profile_score.value(),
         combined_tier: compute::tier_from_score(adjusted_score),
-        profile_tier: compute::tier_from_score(profile_score.value),
-        quality_tier: compute::tier_from_score(assessment.quality_score.value),
+        profile_tier: compute::tier_from_score(profile_score.value()),
+        quality_tier: compute::tier_from_score(assessment.quality_score.value()),
         history,
         partial: assessment.partial,
         quality_score: assessment.quality_score,
@@ -65,12 +64,11 @@ pub fn review(
     context: &Context,
     decision: &Decision,
 ) -> Result<Publication, TriageError> {
-    let head_commit = context.commits.last().ok_or(TriageError::NoCommits)?;
     let payload = CommentPayload {
         profile_score: decision.profile_score,
         profile_tier_label: decision.profile_tier.to_string(),
         profile_tier_icon: decision.profile_tier.icon().to_owned(),
-        quality_score: decision.quality_score.value,
+        quality_score: decision.quality_score.value(),
         quality_tier_label: decision.quality_tier.to_string(),
         quality_tier_icon: decision.quality_tier.icon().to_owned(),
         combined_score: decision.adjusted_score,
@@ -80,15 +78,15 @@ pub fn review(
         key_signal: decision.key_signal.clone(),
         recommendation: decision.recommendation.clone(),
         analysis_partial: decision.partial,
-        history_section: decision.history.history_section.clone(),
+        history: decision.history.presentation.clone(),
     };
 
     Ok(Publication {
         owner: context.request.owner.clone(),
         repo: context.request.repo.clone(),
         pr_number: context.request.pr_number,
-        head_sha: head_commit.sha.clone(),
-        markdown: render::markdown(&payload),
+        head_sha: context.request.head_sha.clone(),
+        markdown: render::markdown(&payload)?,
         tier: decision.combined_tier,
         repeat_offender: decision.history.is_repeat_offender,
         history_penalty: decision.history.penalty,
