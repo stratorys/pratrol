@@ -3,6 +3,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use tracing::error;
 
 use super::GemmaConnector;
 use crate::domains::llm::{
@@ -67,9 +68,23 @@ impl Llm for GemmaConnector {
             builder = builder.header("Authorization", format!("Bearer {api_key}"));
         }
 
-        let response = builder.send().await?.error_for_status()?;
+        let response = builder
+            .send()
+            .await
+            .map_err(|error| {
+                error!(message = "Failed to send chat completion request.", %error);
+                LlmError::Http
+            })?
+            .error_for_status()
+            .map_err(|error| {
+                error!(message = "Chat completion request returned an error status.", %error);
+                LlmError::Http
+            })?;
 
-        let chat_response: ChatResponse = response.json().await?;
+        let chat_response: ChatResponse = response.json().await.map_err(|error| {
+            error!(message = "Failed to decode chat completion response.", %error);
+            LlmError::Http
+        })?;
 
         let content = chat_response
             .choices

@@ -106,7 +106,7 @@ mod tests {
         assert!(
             matches!(
                 outcome,
-                AgentOutcome::Degraded(DegradeReason::UnparsableResponse(AnalysisError::Json(_)))
+                AgentOutcome::Degraded(DegradeReason::UnparsableResponse(AnalysisError::Json))
             ),
             "garbage should degrade to UnparsableResponse::Json"
         );

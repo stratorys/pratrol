@@ -2,7 +2,7 @@ use crate::domains::github::GitHubError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TriageError {
-    #[error(transparent)]
+    #[error("github operation failed")]
     GitHub(#[from] GitHubError),
 
     #[error("pull request has no commits")]

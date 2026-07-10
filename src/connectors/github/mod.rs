@@ -5,6 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use jsonwebtoken::EncodingKey;
 use octocrab::Octocrab;
+use tracing::error;
 
 use crate::domains::github::{
     GitHubApp,
@@ -22,10 +23,22 @@ impl GitHubConnector {
         app_id: u64,
         private_key: &str,
     ) -> Result<Self, GitHubError> {
-        let key = EncodingKey::from_rsa_pem(private_key.as_bytes())?;
-        let app = Octocrab::builder().app(app_id.into(), key).build()?;
+        let key = EncodingKey::from_rsa_pem(private_key.as_bytes()).map_err(|error| {
+            error!(message = "Failed to parse GitHub App private key.", %error);
+            GitHubError::Jwt
+        })?;
+        let app = Octocrab::builder()
+            .app(app_id.into(), key)
+            .build()
+            .map_err(|error| {
+                error!(message = "Failed to build GitHub App client.", %error, app_id);
+                GitHubError::Api
+            })?;
 
-        let app_info: AppInfo = app.get("/app", None::<&()>).await?;
+        let app_info: AppInfo = app.get("/app", None::<&()>).await.map_err(|error| {
+            error!(message = "Failed to fetch GitHub App info.", %error, app_id);
+            GitHubError::Api
+        })?;
         let bot_login = format!("{}[bot]", app_info.slug);
 
         Ok(Self {
@@ -54,7 +67,15 @@ impl GitHubApp for GitHubConnector {
         let (octocrab, _token) = self
             .app
             .installation_and_token(installation_id.into())
-            .await?;
+            .await
+            .map_err(|error| {
+                error!(
+                    message = "Failed to create installation client.",
+                    %error,
+                    installation_id,
+                );
+                GitHubError::Api
+            })?;
 
         Ok(Arc::new(InstalledClient {
             octocrab,

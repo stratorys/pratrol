@@ -74,7 +74,12 @@ async fn run() -> Result<(), AppError> {
 
     let app = api::router().with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(config.listen_addr).await?;
+    let listener = tokio::net::TcpListener::bind(config.listen_addr)
+        .await
+        .map_err(|error| {
+            error!(message = "Failed to bind listener.", %error, addr = %config.listen_addr);
+            AppError::Io
+        })?;
 
     info!(message = "Server started.", addr = %config.listen_addr);
 
@@ -91,7 +96,11 @@ async fn run() -> Result<(), AppError> {
 
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown)
-        .await?;
+        .await
+        .map_err(|error| {
+            error!(message = "Server failed while serving requests.", %error);
+            AppError::Io
+        })?;
 
     info!(message = "Server stopped.");
 

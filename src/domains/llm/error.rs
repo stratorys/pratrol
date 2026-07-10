@@ -1,10 +1,7 @@
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
-    #[error(transparent)]
-    Http(#[from] reqwest::Error),
-
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
+    #[error("llm request failed")]
+    Http,
 
     #[error("empty response")]
     EmptyResponse,

@@ -676,11 +676,8 @@ mod tests {
     #[tokio::test]
     async fn test_execute_github_failure_propagates() {
         let mut app = MockGitHubApp::new();
-        app.expect_installation_client().returning(|_| {
-            let jwt_error =
-                jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken);
-            Err(crate::domains::github::GitHubError::Jwt(jwt_error))
-        });
+        app.expect_installation_client()
+            .returning(|_| Err(crate::domains::github::GitHubError::Jwt));
         let mistral = Arc::new(successful_mistral_response());
         let service = TriageService::new(Arc::new(app), Harness::new(mistral));
 

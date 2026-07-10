@@ -41,7 +41,10 @@ pub async fn handle_webhook(
         return Ok(StatusCode::OK);
     }
 
-    let event: WebhookEvent = serde_json::from_slice(&body)?;
+    let event: WebhookEvent = serde_json::from_slice(&body).map_err(|error| {
+        error!(message = "Failed to parse webhook payload.", %error);
+        ApiError::InvalidPayload
+    })?;
 
     let should_triage = match event.action.as_str() {
         "opened" => !event.pull_request.draft,

@@ -1,8 +1,8 @@
 #[derive(Debug, thiserror::Error)]
 pub enum GitHubError {
-    #[error(transparent)]
-    Api(#[from] octocrab::Error),
+    #[error("github api request failed")]
+    Api,
 
-    #[error(transparent)]
-    Jwt(#[from] jsonwebtoken::errors::Error),
+    #[error("github app credential setup failed")]
+    Jwt,
 }

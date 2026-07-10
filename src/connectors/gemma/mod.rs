@@ -2,6 +2,8 @@ pub mod chat;
 
 use std::time::Duration;
 
+use tracing::error;
+
 use crate::config::Config;
 use crate::domains::llm::LlmError;
 
@@ -18,7 +20,11 @@ impl GemmaConnector {
     pub fn new(config: &Config) -> Result<Self, LlmError> {
         let http_client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
-            .build()?;
+            .build()
+            .map_err(|error| {
+                error!(message = "Failed to build HTTP client.", %error);
+                LlmError::Http
+            })?;
 
         Ok(Self {
             http_client,

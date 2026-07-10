@@ -4,15 +4,15 @@ use crate::domains::llm::LlmError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error(transparent)]
+    #[error("configuration loading failed")]
     Config(#[from] ConfigError),
 
-    #[error(transparent)]
+    #[error("github connector initialization failed")]
     GitHub(#[from] GitHubError),
 
-    #[error(transparent)]
+    #[error("llm connector initialization failed")]
     Llm(#[from] LlmError),
 
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
+    #[error("server io failure")]
+    Io,
 }

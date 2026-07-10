@@ -1,5 +1,8 @@
 use serde::Deserialize;
-use tracing::warn;
+use tracing::{
+    error,
+    warn,
+};
 
 use super::entity::AnalysisResult;
 use super::error::AnalysisError;
@@ -7,7 +10,10 @@ use super::error::AnalysisError;
 pub fn response(raw: &str) -> Result<AnalysisResult, AnalysisError> {
     let trimmed = extract_json(raw);
 
-    let parsed: RawAnalysis = serde_json::from_str(trimmed)?;
+    let parsed: RawAnalysis = serde_json::from_str(trimmed).map_err(|error| {
+        error!(message = "Failed to parse analysis response as JSON.", %error);
+        AnalysisError::Json
+    })?;
 
     validate_range("code_coherence", parsed.code_coherence)?;
     validate_range("commit_quality", parsed.commit_quality)?;
@@ -81,7 +87,7 @@ mod tests {
         let result = response("not json at all");
         assert!(result.is_err(), "should fail on invalid JSON");
         assert!(
-            matches!(result.err(), Some(AnalysisError::Json(_))),
+            matches!(result.err(), Some(AnalysisError::Json)),
             "should be Json error"
         );
     }

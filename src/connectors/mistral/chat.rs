@@ -3,6 +3,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use tracing::error;
 
 use super::MistralConnector;
 use crate::domains::llm::{
@@ -64,10 +65,21 @@ impl Llm for MistralConnector {
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&request)
             .send()
-            .await?
-            .error_for_status()?;
+            .await
+            .map_err(|error| {
+                error!(message = "Failed to send chat completion request.", %error);
+                LlmError::Http
+            })?
+            .error_for_status()
+            .map_err(|error| {
+                error!(message = "Chat completion request returned an error status.", %error);
+                LlmError::Http
+            })?;
 
-        let chat_response: ChatResponse = response.json().await?;
+        let chat_response: ChatResponse = response.json().await.map_err(|error| {
+            error!(message = "Failed to decode chat completion response.", %error);
+            LlmError::Http
+        })?;
 
         let content = chat_response
             .choices
