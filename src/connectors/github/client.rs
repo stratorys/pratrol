@@ -22,14 +22,10 @@ const COMMIT_MESSAGE_MAX_CHARS: usize = 500;
 const MAX_REVIEW_PAGES: u32 = 3;
 
 #[derive(Deserialize)]
-struct PublicEvent {
-    _id: String,
-}
+struct PublicEvent {}
 
 #[derive(Deserialize)]
-struct OrgItem {
-    _login: String,
-}
+struct OrgItem {}
 
 #[async_trait]
 impl GitHubClient for InstalledClient {
