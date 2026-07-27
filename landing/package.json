@@ -10,25 +10,25 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "@nuxt/content": "^3.8.0",
-    "@nuxtjs/robots": "^5.7.0",
+    "@nuxt/content": "^3.15.2",
+    "@nuxtjs/robots": "^5.7.1",
     "@nuxtjs/sitemap": "^7.6.0",
-    "@nuxtjs/tailwindcss": "^6.13.2",
-    "better-sqlite3": "^12.6.2",
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "better-sqlite3": "^12.11.1",
     "debug": "^4.4.3",
-    "nuxt": "^4.3.1",
-    "parse5": "^8.0.0",
+    "nuxt": "^4.5.0",
+    "parse5": "^8.0.1",
     "rehype-raw": "^7.0.0",
     "remark-emoji": "^5.0.2",
     "remark-gfm": "^4.0.1",
-    "remark-mdc": "^3.10.0",
+    "remark-mdc": "^3.11.1",
     "remark-rehype": "^11.1.2",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",
-    "vue": "^3.5.28",
+    "vue": "^3.5.40",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
-    "@tailwindcss/typography": "^0.5.19"
+    "@tailwindcss/typography": "^0.5.20"
   }
 }
