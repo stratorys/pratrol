@@ -26,7 +26,7 @@
     "unified": "^11.0.5",
     "unist-util-visit": "^5.1.0",
     "vue": "^3.5.28",
-    "vue-router": "^4.6.4"
+    "vue-router": "^5.2.0"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19"
